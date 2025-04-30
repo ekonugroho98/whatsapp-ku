@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+     gateway:
+       build:
+         context: ./gateway
+         dockerfile: Dockerfile
+       volumes:
+         - ./gateway:/app
+       environment:
+         - BOT_PHONE_NUMBER=${BOT_PHONE_NUMBER}
+         - WORKER_ENDPOINT=http://worker:3000
+       dns:
+         - 8.8.8.8
+         - 8.8.4.4
+       ports:
+         - "3001:3000"
+       depends_on:
+         redis:
+           condition: service_healthy
+         worker:
+           condition: service_healthy
+       healthcheck:
+         test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+         start_period: 10s
+       networks:
+         - whatsapp-bot-network
+
+     worker:
+       build:
+         context: ./worker
+         dockerfile: Dockerfile
+       volumes:
+         - ./worker:/app
+         - ./credentials.json:/app/credentials.json:ro
+       environment:
+         - FIREBASE_SERVICE_ACCOUNT=${FIREBASE_SERVICE_ACCOUNT}
+         - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+         - AI_ENDPOINT=http://ai-service:8000/process_expense
+         - AI_IMAGE_ENDPOINT=http://ai-service:8000/process_image_expense
+       ports:
+         - "3002:3000"
+       depends_on:
+         redis:
+           condition: service_healthy
+         ai-service:
+           condition: service_healthy
+       healthcheck:
+         test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+         start_period: 10s
+       networks:
+         - whatsapp-bot-network
+
+     ai-service:
+       build:
+         context: ./ai-service
+         dockerfile: Dockerfile
+       volumes:
+         - ./ai-service:/app
+       environment:
+         - GEMINI_API_KEY=${GEMINI_API_KEY}
+       healthcheck:
+         test: ["CMD", "curl", "http://localhost:8000/health"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+         start_period: 10s
+       networks:
+         - whatsapp-bot-network
+
+     redis:
+       image: redis:latest
+       healthcheck:
+         test: ["CMD", "redis-cli", "ping"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+         start_period: 10s
+       networks:
+         - whatsapp-bot-network
+
+networks:
+     whatsapp-bot-network:
+       driver: bridge

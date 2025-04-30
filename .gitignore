@@ -1,0 +1,20 @@
+# File sensitif di root
+credentials.json
+
+# Direktori ai-service
+ai-service/__pycache__/
+ai-service/*.pyc
+ai-service/venv/
+ai-service/.env
+
+# Direktori gateway
+gateway/auth_info_baileys/
+gateway/node_modules/
+gateway/.env
+
+# Direktori worker
+worker/node_modules/
+worker/.env
+worker/config_price_gold.json
+worker/credentials.json
+worker/credentials_fb.json
