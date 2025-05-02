@@ -121,19 +121,14 @@ async function handleLogamMuliaText(sheets, customer, text) {
   }
 }
 
-async function handleLogamMuliaImage(sheets, customer, imageMessage, lastTextMessage) {
-  const caption = imageMessage.caption || lastTextMessage || '';
-  console.log('Caption gambar:', caption);
+async function handleLogamMuliaImage(sheets, customer, imageBufferBase64, caption) {
+  if (!caption) throw new Error('Harap sertakan tujuan savings dalam caption.');
 
-  if (!caption) {
-    throw new Error('Harap sertakan tujuan savings dalam caption gambar atau pesan teks sebelumnya.\nContoh: "Dana Darurat"');
-  }
-
-  const imageBuffer = Buffer.from(imageMessage.jpegThumbnail || imageMessage.url || '', 'base64');
+  const imageBuffer = Buffer.from(imageBufferBase64, 'base64');
   const transactions = await processImageWithAILM(imageBuffer, caption);
-  console.log('Transaksi yang ditemukan dalam gambar:', transactions);
+
   if (!transactions || transactions.length === 0) {
-    throw new Error('Tidak ditemukan transaksi dalam gambar. Pastikan gambar berisi informasi:\n- Jenis LM\n- Berat\n- Nominal\n- Qty');
+    throw new Error('Tidak ditemukan transaksi dalam gambar.');
   }
 
   const successMessages = [];
@@ -142,10 +137,7 @@ async function handleLogamMuliaImage(sheets, customer, imageMessage, lastTextMes
 
   for (const transaction of transactions) {
     const transactionKey = `${transaction.jenis_lm}|${transaction.berat}|${transaction.nominal}|${transaction.qty}`;
-    if (seenTransactions.has(transactionKey)) {
-      console.log('Transaksi duplikat ditemukan, dilewati:', transactionKey);
-      continue;
-    }
+    if (seenTransactions.has(transactionKey)) continue;
     seenTransactions.add(transactionKey);
 
     const data = {
@@ -157,21 +149,19 @@ async function handleLogamMuliaImage(sheets, customer, imageMessage, lastTextMes
       tabel_savings: transaction.tabel_savings || 'Tidak Berlaku'
     };
 
-    console.log('Data transaksi dari gambar:', data);
-
     if (!data.nominal || data.nominal == 0) {
-      throw new Error('Nominal tidak valid. Pastikan gambar berisi informasi nominal yang jelas.');
+      throw new Error('Nominal tidak valid.');
     }
 
     if (data.tabel_savings === 'Tidak Berlaku') {
-      throw new Error('Tujuan savings tidak dikenali. Gunakan salah satu dari:\n- Dana Darurat\n- Pendidikan Anak\n- Investasi\n- Dana Pensiun\n- Haji & Umroh\n- Rumah\n- Wedding\n- Mobil\n- Liburan\n- Gadget');
+      throw new Error('Tujuan savings tidak dikenali.');
     }
 
     const nominal = parseNominal(data.nominal.toString());
     if (isNaN(nominal) || nominal <= 0) throw new Error('Nominal harus angka positif.');
     data.nominal = nominal;
 
-    await writeToGoogleSheetLM(sheets, customer.spreadsheets.logam_mulia, data); // Gunakan spreadsheets.logam_mulia
+    await writeToGoogleSheetLM(sheets, customer.spreadsheets.logam_mulia, data);
     successMessages.push(
       `✅ Transaksi berhasil dicatat!\n\n📅 Tanggal: ${data.tanggal}\n🏷️ Jenis LM: ${data.jenis_lm}\n⚖️ Berat: ${data.berat}g\n💰 Nominal: Rp${nominal.toLocaleString('id-ID')}\n🔢 Qty: ${data.qty}\n📊 Tabel: ${data.tabel_savings}`
     );
@@ -181,9 +171,7 @@ async function handleLogamMuliaImage(sheets, customer, imageMessage, lastTextMes
     throw new Error('Tidak ada transaksi valid yang ditemukan dalam gambar.');
   }
 
-  return {
-    reply: successMessages.join('\n\n━━━━━━━━━━━━━━━━\n\n')
-  };
+  return { reply: successMessages.join('\n\n━━━━━━━━━━━━━━━━\n\n') };
 }
 
 module.exports = {

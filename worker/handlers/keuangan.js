@@ -65,13 +65,22 @@ async function handleKeuanganText(sheets, customer, text) {
   }
 }
 
-async function handleKeuanganImage(sheets, customer, imageMessage) {
+async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption) {
   try {
-    const imageBase64 = imageMessage.jpegThumbnail || ''; // Sesuaikan cara ekstraksi gambar
-    console.log('Gambar yang diterima:', imageBase64);
-    const caption = imageMessage.caption || '';
+
+    // Validasi base64
+    if (!imageBufferBase64 || typeof imageBufferBase64 !== 'string' || imageBufferBase64.length < 1000) {
+      throw new Error('Data gambar tidak valid atau terlalu kecil.');
+    }
+    const isProbablyJpeg = imageBufferBase64.startsWith('/9j/');
+    if (!isProbablyJpeg) {
+      throw new Error('Gambar tidak terdeteksi sebagai JPEG. Harap kirim gambar dengan format yang benar.');
+    }
+
+      
+    const image = imageBufferBase64;
     const response = await axios.post(`${AI_API_URL}/process_image_expense_keuangan`, {
-      image: imageBase64,
+      image,
       caption,
     });
     const transactions = response.data.transactions;
@@ -80,8 +89,7 @@ async function handleKeuanganImage(sheets, customer, imageMessage) {
       return { reply: 'Tidak ada transaksi keuangan yang terdeteksi pada gambar.' };
     }
 
-    // Simpan setiap transaksi ke Google Sheets
-    const spreadsheetId = customer.spreadsheets?.keuangan; // Perbaiki akses spreadsheetId
+    const spreadsheetId = customer.spreadsheets?.keuangan;
     if (!spreadsheetId) {
       throw new Error('Spreadsheet ID untuk fitur keuangan tidak ditemukan untuk pelanggan ini.');
     }
@@ -94,11 +102,11 @@ async function handleKeuanganImage(sheets, customer, imageMessage) {
       const values = [
         [
           t.tanggal,
-          t.transaksi,
-          "", "", // Empty columns
+          t.tipe_transaksi,
+          '', '',
           t.kategori,
-          "", "", // Empty columns
-          "Rp.",
+          '', '',
+          'Rp.',
           t.nominal,
           t.keterangan
         ],
@@ -108,28 +116,20 @@ async function handleKeuanganImage(sheets, customer, imageMessage) {
         spreadsheetId,
         range,
         valueInputOption: 'RAW',
-        resource: {
-          values,
-        },
+        resource: { values },
       });
 
-      // Format tanggal dari YYYY-MM-DD ke DD-MM-YY
       const dateObj = new Date(t.tanggal);
       const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getFullYear()).slice(-2)}`;
-
-      // Format nominal dengan Rp. dan dua desimal
       const formattedNominal = Number(t.nominal);
       const nominalWithCurrency = `Rp${formattedNominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-      // Tambahkan pesan dengan ikon
       successMessages.push(
         `✅ Transaksi dicatat!\n\n📅 Tanggal: ${formattedDate}\n📋 Kategori: ${t.kategori}\n💰 Nominal: ${nominalWithCurrency}\n📝 Keterangan: ${t.keterangan || 'Tidak ada'}`
       );
     }
 
-    // Gabungkan semua pesan
-    const reply = successMessages.join('\n\n');
-    return { reply };
+    return { reply: successMessages.join('\n\n') };
   } catch (error) {
     console.error('Error di handleKeuanganImage:', error.message);
     throw new Error(`Error calling AI endpoint for Keuangan: ${error.message}`);

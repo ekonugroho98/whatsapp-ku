@@ -164,7 +164,7 @@ def call_gemini_image_api(image_base64: str, caption: str):
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")

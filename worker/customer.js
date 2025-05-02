@@ -127,9 +127,6 @@ async function checkCustomerStatus(from, config, selectedFeature) {
     throw new Error('Langganan Anda telah kedaluwarsa.\nPerpanjang langganan untuk melanjutkan.');
   }
 
-  // Tambahkan logging untuk memastikan data spreadsheets
-  console.log(`Data spreadsheets untuk nomor ${from}:`, customer.spreadsheets);
-
   const spreadsheets = customer.spreadsheets || {};
   if (!spreadsheets[selectedFeature]) {
     throw new Error(

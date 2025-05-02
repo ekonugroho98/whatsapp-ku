@@ -1,6 +1,7 @@
+// === gateway/index.js ===
 console.log('Starting gateway process...');
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const dotenv = require('dotenv');
 const QRCode = require('qrcode');
@@ -10,7 +11,6 @@ const dns = require('dns').promises;
 
 dotenv.config();
 
-// Debug DNS resolution
 (async () => {
   try {
     console.log('Resolving web.whatsapp.com...');
@@ -24,15 +24,10 @@ dotenv.config();
 const WORKER_ENDPOINT = process.env.WORKER_ENDPOINT || 'http://localhost:3002';
 const BOT_PHONE_NUMBER = process.env.BOT_PHONE_NUMBER || '6281234567890';
 
-// Initialize Express app for health check
 const app = express();
-
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
-
-// Start Express server for health checks
 app.listen(3001, () => console.log('Gateway health check server running on port 3001'));
 
 async function startGateway() {
@@ -46,7 +41,6 @@ async function startGateway() {
     connectTimeoutMs: 60000
   });
 
-  // Connection updates
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -54,7 +48,8 @@ async function startGateway() {
       console.log(`QR Code for ${BOT_PHONE_NUMBER}...`);
       QRCode.toString(qr, { type: 'terminal' }, (err, string) => {
         if (err) console.error('Failed to display QR code:', err);
-        else console.log(`Scan QR for ${BOT_PHONE_NUMBER}:\n${string}`);
+        else console.log(`Scan QR for ${BOT_PHONE_NUMBER}:
+${string}`);
       });
 
       QRCode.toDataURL(qr, (err, url) => {
@@ -74,16 +69,24 @@ async function startGateway() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  // Message handling: Forward to worker and send reply back to WhatsApp
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
     try {
-      console.log(`Received message from ${msg.key.remoteJid}: ${msg.message?.conversation || msg.message?.extendedTextMessage?.text}`);
-      const response = await axios.post(`${WORKER_ENDPOINT}/process-message`, { message: msg });
-      const { reply } = response.data;
+      let imageBufferBase64 = null;
+      if (msg.message.imageMessage) {
+        const buffer = await downloadMediaMessage(msg, 'buffer', {});
+        imageBufferBase64 = buffer.toString('base64');
+      }
 
+      console.log(`Received message from ${msg.key.remoteJid}: ${msg.message?.conversation || msg.message?.extendedTextMessage?.text}`);
+      const response = await axios.post(`${WORKER_ENDPOINT}/process-message`, {
+        message: msg,
+        imageBufferBase64,
+      });
+
+      const { reply } = response.data;
       if (reply) {
         await sock.sendMessage(msg.key.remoteJid, { text: reply });
         console.log(`Sent reply to ${msg.key.remoteJid}: ${reply}`);

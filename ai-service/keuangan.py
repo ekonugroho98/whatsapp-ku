@@ -47,7 +47,7 @@ def call_gemini_api_keuangan(text: str):
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -147,7 +147,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key{api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -157,8 +157,15 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     Analisis gambar ini (misalnya, struk belanja) dan identifikasi setiap transaksi secara terpisah. Untuk setiap item, tentukan:
     1. Kategori (pilih dari: Makanan & Minuman, Kehidupan Sosial, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Jiwa, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
     2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
-    3. Nominal (jumlah tepat seperti yang tertulis pada item, dalam format angka desimal menggunakan titik sebagai pemisah desimal, tanpa simbol 'Rp', dan tanpa pembulatan)
-    4. Keterangan (barang/jasa spesifik seperti yang tertulis)
+    3. Nominal (jumlah tepat seperti yang tertulis pada item, hilangkan format titik atau koma jika ada, jika ada 2 angka 0 di balekang koma atau titik hilangkan juga, tanpa simbol 'Rp', dan tanpa pembulatan)
+    4. Keterangan (barang/jasa spesifik seperti yang tertulis) atau tentukan dari caption '{caption}' jika ada
+
+    Instruksi detail: 
+      - Jika ada diskon maka tambahkan minus pada nominal
+      - Jika ada Total maka abaikan nominal yang lain yg menyatakan item
+      - Jika ada pajak maka tambahkan nominal pajak ke nominal item
+      - Jika ada keterangan yang tidak jelas, gunakan "Tidak spesifik" 
+      
     Kembalikan hasil dalam format JSON yang valid:
     ```json
     {
@@ -196,8 +203,8 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     }
 
     try:
-        curl_command = generate_curl_command(url, headers, payload)
-        logger.info(f"Perintah curl untuk Gemini API (teks): {curl_command}")
+        # curl_command = generate_curl_command(url, headers, payload)
+        # logger.info(f"Perintah curl untuk Gemini API (teks): {curl_command}")
         
         logger.info("Memanggil Gemini API untuk gambar dan caption keuangan")
         response = requests.post(url, json=payload, headers=headers, timeout=60)
