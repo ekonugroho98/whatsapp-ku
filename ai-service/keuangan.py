@@ -55,7 +55,7 @@ def call_gemini_api_keuangan(text: str):
     prompt = f"""
     Dari teks berikut: "{text}"
         Tentukan:
-        1. Kategori (pilih dari: Gaji, Bisnis, Usaha Sampingan, Dividen, Pendapatan Bunga, Komisi, Pemasukan Lainnya, Makanan & Minuman, Kehidupan Sosial, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
+        1. Kategori (pilih dari: Gaji, Bisnis, Usaha Sampingan, Dividen, Pendapatan Bunga, Komisi, Lain-lain, Makanan & Minuman, Kehidupan Sosial, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
         2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
         3. Ekstrak "Nominal". Konversi satuan "k", "rb", "ribu" menjadi x1000; "jt", "juta" menjadi x1000000; "m", "milyar" menjadi x1000000000. Berikan hasil konversi dalam bentuk angka desimal penuh, tanpa simbol mata uang atau satuan. Jika tidak ada atau tidak valid, tetapkan ke 0.
         4. Keterangan (barang/jasa spesifik)
@@ -155,7 +155,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     
     prompt = """
     Analisis gambar ini (misalnya, struk belanja) dan identifikasi setiap transaksi secara terpisah. Untuk setiap item, tentukan:
-    1. Kategori (pilih dari: Makanan & Minuman, Kehidupan Sosial, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Jiwa, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
+    1. Kategori (pilih dari: Makanan & Minuman, Kehidupan Sosial, Kebutuhan Anak, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Jiwa, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
     2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
     3. Nominal (jumlah tepat seperti yang tertulis pada item, hilangkan format titik atau koma jika ada, jika ada 2 angka 0 di balekang koma atau titik hilangkan juga, tanpa simbol 'Rp', dan tanpa pembulatan)
     4. Keterangan (barang/jasa spesifik seperti yang tertulis) atau tentukan dari caption '{caption}' jika ada
@@ -165,6 +165,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
       - Jika ada Total maka abaikan nominal yang lain yg menyatakan item
       - Jika ada pajak maka tambahkan nominal pajak ke nominal item
       - Jika ada keterangan yang tidak jelas, gunakan "Tidak spesifik" 
+      - Jika ada Kategori di '{caption}',  Maka Penentuan Kategori diutaman berdasarkan caption
       
     Kembalikan hasil dalam format JSON yang valid:
     ```json
