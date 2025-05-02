@@ -71,19 +71,20 @@ async function registerCustomer(newNumber, registeredBy, config) {
 
   config.customers.push({
     phoneNumber: newNumber,
-    spreadsheetId: '',
+    spreadsheets: {}, // Ganti spreadsheetId menjadi spreadsheets
     whitelisted: true,
     subscriptionExp: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 hari dari sekarang
     registeredAt: admin.firestore.Timestamp.fromDate(new Date()),
     lastActive: admin.firestore.Timestamp.fromDate(new Date()),
-    registeredBy: registeredBy
+    registeredBy: registeredBy,
+    features: ['logam_mulia'] // Default hanya logam mulia
   });
 
   await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOC).set(config);
   return config;
 }
 
-async function updateSpreadsheetId(phoneNumber, spreadsheetId, config) {
+async function updateSpreadsheetId(phoneNumber, feature, spreadsheetId, config) {
   const db = initializeFirebase();
   const customer = config.customers.find(c => c.phoneNumber === phoneNumber);
   
@@ -91,7 +92,9 @@ async function updateSpreadsheetId(phoneNumber, spreadsheetId, config) {
     throw new Error('Nomor tidak ditemukan dalam daftar pelanggan.');
   }
 
-  customer.spreadsheetId = spreadsheetId;
+  // Inisialisasi spreadsheets jika belum ada
+  customer.spreadsheets = customer.spreadsheets || {};
+  customer.spreadsheets[feature] = spreadsheetId; // Simpan spreadsheetId berdasarkan fitur
   customer.lastActive = admin.firestore.Timestamp.fromDate(new Date());
   await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOC).set(config);
   return config;
@@ -108,4 +111,25 @@ async function updateLastActive(phoneNumber, config) {
   return config;
 }
 
-module.exports = { initializeFirebase, getConfig, registerCustomer, updateSpreadsheetId, updateLastActive };
+async function updateCustomerFeatures(phoneNumber, features, config) {
+  const db = initializeFirebase();
+  const customer = config.customers.find(c => c.phoneNumber === phoneNumber);
+  
+  if (!customer) {
+    throw new Error('Nomor tidak ditemukan dalam daftar pelanggan.');
+  }
+
+  customer.features = features; // Update fitur
+  customer.lastActive = admin.firestore.Timestamp.fromDate(new Date());
+  await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOC).set(config);
+  return config;
+}
+
+module.exports = { 
+  initializeFirebase, 
+  getConfig, 
+  registerCustomer, 
+  updateSpreadsheetId, 
+  updateLastActive,
+  updateCustomerFeatures
+};
