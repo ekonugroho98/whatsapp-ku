@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import re
@@ -8,6 +9,7 @@ import base64
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+from keuangan import router as keuangan_router  # Impor router dari keuangan.py
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +23,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Sertakan router dari keuangan.py
+app.include_router(keuangan_router)
 
 # Health check endpoint
 @app.get("/health")
@@ -36,7 +41,7 @@ class ImageExpenseInput(BaseModel):
     image: str  # Base64 encoded image (string)
     caption: str  # Caption text (string)
 
-# Fungsi untuk memanggil API Gemini untuk teks
+# Fungsi untuk memanggil API Gemini untuk teks (Logam Mulia)
 def call_gemini_api(text: str):
     """
     Calls Gemini API to process text input and extract LM transaction details, including date.
@@ -151,15 +156,19 @@ def call_gemini_api(text: str):
         logger.error(f"Error saat memproses respons Gemini (teks): {str(e)}")
         raise Exception(f"Error saat memproses respons Gemini: {str(e)}")
 
-# Fungsi untuk memanggil API Gemini untuk gambar dan caption
+# Fungsi untuk memanggil API Gemini untuk gambar dan caption (Logam Mulia)
 def call_gemini_image_api(image_base64: str, caption: str):
-    logger.info("Masuk ke function call_gemini_image_api")
+    logger.info("Masuk ke fungsi call_gemini_image_api")
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
         
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key={api_key}"
+    
+    # Tanggal saat ini untuk default
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    
     example_json = """
     {
       "transactions": [
@@ -168,7 +177,8 @@ def call_gemini_image_api(image_base64: str, caption: str):
           "berat": [Berat dalam gram],
           "nominal": [Nominal angka penuh],
           "qty": [Qty],
-          "tabel_savings": "[Tabel Savings]"
+          "tabel_savings": "[Tabel Savings]",
+          "tanggal": "[Tanggal dalam format YYYY-MM-DD]"
         }
       ]
     }
@@ -176,19 +186,28 @@ def call_gemini_image_api(image_base64: str, caption: str):
     empty_json_example = '{"transactions": []}'
     prompt = f"""
     Analisis gambar ini (misalnya, struk pembelian logam mulia) dan ekstrak detail setiap transaksi terpisah.
-    Gunakan caption berikut untuk membantu menentukan tujuan savings jika tidak jelas dari gambar: "{caption}"
+    Gunakan caption untuk informasi tambahan: "{caption}"
 
     Untuk setiap item/transaksi yang terdeteksi, identifikasi:
-    Sajikan semua detail transaksi yang terdeteksi dalam format JSON yang valid.
+    - "Jenis LM" dari daftar berikut: Antam, UBS, PAMP, Galeri24, Wonderful Wish, Big Gold, Lotus Archi, Hartadinata, King Halim, Antam Retro, Semar Nusantara. Jika tidak ada di daftar atau tidak jelas, gunakan "Merk Lain". Jika diawali "emas ", abaikan "emas ".
+    - "Berat" dalam gram (hanya angka, desimal atau bulat). Konversi jika perlu (misalnya, "1kg" menjadi 1000, "5gr" menjadi 5). Jika tidak ada atau tidak jelas, gunakan 0.0.
+    - "Nominal" (opsional, dalam angka penuh). Konversi satuan: "k", "rb", "ribu" menjadi x1000; "jt", "juta" menjadi x1000000; "m", "milyar" menjadi x1000000000. Jika tidak ada atau tidak valid, gunakan 0.
+    - "Qty" (dalam angka bulat). Jika tidak ada atau tidak jelas, gunakan 1.
+    - "Tabel Savings" dari caption atau gambar, dari daftar: Dana Darurat, Pendidikan Anak, Investasi, Dana Pensiun, Haji & Umroh, Rumah, Wedding, Mobil, Liburan, Gadget. Gunakan konteks jika tidak eksplisit disebutkan. Jika tidak relevan/tidak jelas, gunakan "Tidak Berlaku".
+    - "Tanggal" pembelian: 
+      - Cari tanggal pembelian dari gambar (misalnya, pada struk).
+      - Jika tidak ada di gambar, cari di caption (contoh: "pembelian tanggal 11 Januari 2010").
+      - Jika tidak ada di gambar maupun caption, gunakan tanggal saat ini ({current_date}) sebagai default.
+      - Konversi tanggal ke format YYYY-MM-DD (contoh: 2010-01-11).
+      - Jika tanggal tidak valid (misalnya, di masa depan dibandingkan {current_date}, atau format salah), kembalikan: Error: Tanggal tidak valid.
+
+    Sajikan semua detail transaksi dalam format JSON yang valid.
     Struktur JSON harus berupa objek tunggal dengan kunci "transactions" yang berisi array objek transaksi.
-    Setiap objek dalam array "transactions" harus memiliki kunci: "jenis_lm" (string), "berat" (number), "nominal" (number), "qty" (integer), "tabel_savings" (string).
+    Setiap objek dalam array "transactions" harus memiliki kunci: "jenis_lm" (string), "berat" (number), "nominal" (number), "qty" (integer), "tabel_savings" (string), "tanggal" (string dalam format YYYY-MM-DD).
 
     Contoh format JSON yang diharapkan:
     {example_json}
     
-    Instruksi Detail :
-      - Identifikasi "Jenis LM" dari daftar berikut: Antam, UBS, PAMP, Galeri24, Wonderful Wish, Big Gold, Lotus Archi, Hartadinata, King Halim, Antam Retro, Semar Nusantara. Jika tidak ada di daftar atau tidak jelas, gunakan "Merk Lain". Jika diawali "emas ", abaikan "emas ".
-
     Jika tidak ada transaksi yang terdeteksi dalam gambar, kembalikan JSON dengan array kosong: {empty_json_example}
 
     Pastikan respons Anda HANYA JSON yang valid, tanpa teks penjelasan atau markdown formatting (seperti ```json```) di luar blok JSON itu sendiri.
@@ -232,7 +251,7 @@ def call_gemini_image_api(image_base64: str, caption: str):
             parsed_result = json.loads(cleaned_text)
             if not isinstance(parsed_result, dict) or "transactions" not in parsed_result or not isinstance(parsed_result["transactions"], list):
                 logger.error(f"Struktur respons JSON dari Gemini tidak valid: {parsed_result}")
-                raise Exception(f"Invalid JSON structure received from Gemini API. Raw response text: {generated_text}")
+                raise Exception(f"Struktur JSON tidak valid dari Gemini API. Teks respons mentah: {generated_text}")
                  
             transactions_raw = parsed_result["transactions"]
             
@@ -264,6 +283,20 @@ def call_gemini_image_api(image_base64: str, caption: str):
                     processed_item['qty'] = 1
                      
                 processed_item['tabel_savings'] = str(item.get('tabel_savings', 'Tidak Berlaku'))
+                
+                # Ambil tanggal dari respons, jika tidak ada atau tidak valid, gunakan tanggal saat ini
+                tanggal = item.get('tanggal', current_date)
+                try:
+                    # Validasi format tanggal (YYYY-MM-DD)
+                    parsed_date = datetime.strptime(tanggal, "%Y-%m-%d")
+                    current_datetime = datetime.strptime(current_date, "%Y-%m-%d")
+                    if parsed_date > current_datetime:
+                        logger.warning(f"Tanggal '{tanggal}' adalah tanggal di masa depan. Menggunakan tanggal saat ini: {current_date}")
+                        tanggal = current_date
+                except ValueError:
+                    logger.warning(f"Tanggal '{tanggal}' tidak valid. Menggunakan tanggal saat ini: {current_date}")
+                    tanggal = current_date
+                processed_item['tanggal'] = tanggal
                  
                 transactions_processed.append(processed_item)
 
@@ -273,20 +306,20 @@ def call_gemini_image_api(image_base64: str, caption: str):
             
         except json.JSONDecodeError as e:
             logger.error(f"Gagal mem-parse respons sebagai JSON: {cleaned_text}. Error: {e}")
-            raise Exception(f"Invalid JSON response from Gemini API: {str(e)}. Raw text: {generated_text}")
+            raise Exception(f"Respons JSON tidak valid dari Gemini API: {str(e)}. Teks mentah: {generated_text}")
         except Exception as e:
-            logger.error(f"Error saat memproses struktur JSON dari Gemini: {str(e)}. Raw text: {generated_text}")
-            raise Exception(f"Error processing Gemini JSON response structure: {str(e)}. Raw text: {generated_text}")
+            logger.error(f"Error saat memproses struktur JSON dari Gemini: {str(e)}. Teks mentah: {generated_text}")
+            raise Exception(f"Error memproses struktur JSON dari Gemini: {str(e)}. Teks mentah: {generated_text}")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
         raise Exception(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
     except Exception as e:
         logger.error(f"Error tak terduga saat memanggil Gemini Image API: {str(e)}")
-        raise Exception(f"Unexpected error during Gemini Image API call: {str(e)}")
+        raise Exception(f"Error tak terduga saat memanggil Gemini Image API: {str(e)}")
 
-# Endpoint untuk memproses pengeluaran (teks)
-@app.post("/process_expense")
+# Endpoint untuk memproses pengeluaran (teks) - Logam Mulia
+@app.post("/process_expense_lm")
 async def process_expense(input: ExpenseInput):
     """
     Processes text input to extract LM transaction details using Gemini API.
@@ -306,10 +339,10 @@ async def process_expense(input: ExpenseInput):
         logger.error(f"Error memproses input teks '{text}': {str(e)}")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses teks: {str(e)}")
 
-# Endpoint untuk memproses pengeluaran (gambar dan caption)
-@app.post("/process_image_expense")
+# Endpoint untuk memproses pengeluaran (gambar dan caption) - Logam Mulia
+@app.post("/process_image_expense_lm")
 async def process_image_expense(input: ImageExpenseInput):
-    logger.info("Masuk ke function ke endpoint")
+    logger.info("Masuk ke endpoint process_image_expense_lm")
     """
     Processes image and caption input to extract LM transaction details using Gemini Vision API.
     """
