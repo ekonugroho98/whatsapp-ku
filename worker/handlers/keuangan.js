@@ -67,8 +67,6 @@ async function handleKeuanganText(sheets, customer, text) {
 
 async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption) {
   try {
-
-    // Validasi base64
     if (!imageBufferBase64 || typeof imageBufferBase64 !== 'string' || imageBufferBase64.length < 1000) {
       throw new Error('Data gambar tidak valid atau terlalu kecil.');
     }
@@ -77,16 +75,20 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
       throw new Error('Gambar tidak terdeteksi sebagai JPEG. Harap kirim gambar dengan format yang benar.');
     }
 
-      
     const image = imageBufferBase64;
     const response = await axios.post(`${AI_API_URL}/process_image_expense_keuangan`, {
       image,
       caption,
     });
-    const transactions = response.data.transactions;
+
+    const transactions = response.data.transactions || [];
+    const note = response.data.note;
 
     if (transactions.length === 0) {
-      return { reply: 'Tidak ada transaksi keuangan yang terdeteksi pada gambar.' };
+      // Jika tidak ada transaksi, kirim note humanis atau fallback message
+      return {
+        reply: note || '❗ Gambar tidak terdeteksi sebagai struk atau tidak mengandung transaksi keuangan.'
+      };
     }
 
     const spreadsheetId = customer.spreadsheets?.keuangan;
@@ -99,18 +101,16 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
 
     const successMessages = [];
     for (const t of transactions) {
-      const values = [
-        [
-          t.tanggal,
-          t.tipe_transaksi,
-          '', '',
-          t.kategori,
-          '', '',
-          'Rp.',
-          t.nominal,
-          t.keterangan
-        ],
-      ];
+      const values = [[
+        t.tanggal,
+        t.tipe_transaksi,
+        '', '',
+        t.kategori,
+        '', '',
+        'Rp.',
+        t.nominal,
+        t.keterangan
+      ]];
 
       await sheets.spreadsheets.values.append({
         spreadsheetId,
@@ -121,20 +121,26 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
 
       const dateObj = new Date(t.tanggal);
       const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getFullYear()).slice(-2)}`;
-      const formattedNominal = Number(t.nominal);
-      const nominalWithCurrency = `Rp${formattedNominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const nominalWithCurrency = `Rp${Number(t.nominal).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
       successMessages.push(
         `✅ Transaksi dicatat!\n\n📅 Tanggal: ${formattedDate}\n📋 Kategori: ${t.kategori}\n💰 Nominal: ${nominalWithCurrency}\n📝 Keterangan: ${t.keterangan || 'Tidak ada'}`
       );
     }
 
-    return { reply: successMessages.join('\n\n') };
+    // Gabungkan note dengan hasil sukses
+    const fullReply = [
+      ...(note ? [note] : []),
+      ...successMessages
+    ].join('\n\n');
+
+    return { reply: fullReply };
   } catch (error) {
     console.error('Error di handleKeuanganImage:', error.message);
     throw new Error(`Error calling AI endpoint for Keuangan: ${error.message}`);
   }
 }
+
 
 function getCurrentMonthInThreeLetters() {
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];

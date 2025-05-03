@@ -148,54 +148,60 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     from dotenv import load_dotenv
     import os
     load_dotenv()
-    
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
-        
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    
-    # Tanggal saat ini untuk default
+
     current_date = datetime.now().strftime("%Y-%m-%d")
-    
+
     kategori_str = ", ".join(ALLOWED_KATEGORI)
     prompt = f"""
     Berikan daftar transaksi dari gambar struk ini. Untuk setiap item, berikan:
 
-    1. Kategori (pilih dari: {kategori_str})
+    1. kategori (pilih dari: {kategori_str})
     2. tipe_transaksi: salah satu dari [Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan]
-    3. Nominal:
+    3. nominal:
         - Ambil angka dari item yang terlihat seperti harga.
-        - Hilangkan simbol "Rp", titik, dan koma dari angka.
+        - Hilangkan simbol \"Rp\", titik, dan koma dari angka.
         - Jika ditemukan dua angka nol di belakang titik atau koma (misalnya ".00" atau ",00"), abaikan bagian tersebut.
         - Hasil akhir harus berupa angka bulat (tanpa desimal).
         - Jika item adalah diskon, gunakan nilai negatif.
-        - Jika ditemukan item "Total", hanya ambil nilai dari Total dan abaikan item lain
+        - Jika ditemukan item \"Total\", hanya ambil nilai dari Total dan abaikan item lain
     4. keterangan: nama barang/jasa, atau dari caption jika tersedia.
     5. tanggal: format YYYY-MM-DD, gunakan hari ini jika tidak ditemukan.
 
     Instruksi tambahan:
     - Jika caption mengandung nama kategori, gunakan itu untuk seluruh transaksi jika cocok.
     - Tambahkan nominal pajak ke item jika terpisah.
-    - Jika tidak jelas, isi: kategori = "Lain-lain", keterangan = "Tidak spesifik", nominal = 0.
     - Jika caption mengandung petunjuk kategori, gunakan sebagai kategori hanya jika sesuai dengan daftar berikut: 
       {kategori_str}
     - Jika tidak sesuai daftar, abaikan petunjuk kategori dari caption.
+    - Jika Nama item jelas, tentukan kategori berdasarkan nama item.
 
-    Jawaban harus berupa JSON valid. Contoh:
+    Berikan jawaban dalam format JSON:
+    ```json
     {{
-    "transactions": [
-        {{
-        "kategori": "Makanan & Minuman",
-        "tipe_transaksi": "Pengeluaran",
-        "nominal": 25000,
-        "keterangan": "Nasi Goreng",
-        "tanggal": "{current_date}"
-        }}
-    ]
+        "kategori": "[kategori]",
+        "transaksi": "[tipe_transaksi]",
+        "nominal": [nominal],
+        "tanggal": "[tanggal]",
+        "keterangan": "[keterangan]"
     }}
-    Jika tidak ada transaksi, balas: {{ "transactions": [] }}
+    
+    Jika gambar bukan struk belanja atau tidak relevan, balas:
+    {{
+      "transactions": [],
+      "note": "Gambar ini tidak tampak seperti struk belanja. Jika kamu ingin saya bantu mencatat transaksi, silakan kirim foto struk yang jelas."
+    }}
+
+    Jika tidak ada transaksi, balas: 
+    {{
+      "transactions": []
+    }}
     """
 
     payload = {
@@ -212,22 +218,18 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         }]
     }
 
-
     headers = {
         "Content-Type": "application/json"
     }
 
     try:
-        # curl_command = generate_curl_command(url, headers, payload)
-        # logger.info(f"Perintah curl untuk Gemini API (teks): {curl_command}")
-        
         logger.info("Memanggil Gemini API untuk gambar dan caption keuangan")
         response = requests.post(url, json=payload, headers=headers, timeout=60)
         response.raise_for_status()
         result = response.json()
-        
+
         generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
-        
+
         logger.info(f"Respons mentah dari Gemini (gambar keuangan): {generated_text}")
 
         cleaned_text = generated_text
@@ -235,35 +237,42 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
             cleaned_text = generated_text[7:-3].strip()
         elif cleaned_text.startswith("```"):
             cleaned_text = generated_text[3:-3].strip()
-        
+
         try:
             parsed_result = json.loads(cleaned_text)
+
+            note = parsed_result.get("note")
+            if note:
+                logger.info(f"Catatan dari Gemini: {note}")
+                return {
+                    "transactions": [],
+                    "note": note
+                }
+
             if not isinstance(parsed_result, dict) or "transactions" not in parsed_result or not isinstance(parsed_result["transactions"], list):
                 logger.error(f"Struktur respons JSON dari Gemini tidak valid: {parsed_result}")
                 raise Exception(f"Struktur JSON tidak valid dari Gemini API. Teks respons mentah: {generated_text}")
-                 
+
             transactions_raw = parsed_result["transactions"]
-            
+
             transactions_processed = []
             for item in transactions_raw:
                 if not isinstance(item, dict):
                     logger.warning(f"Item dalam array transactions bukan objek: {item}. Melewati.")
                     continue
-                     
+
                 processed_item = {}
                 processed_item['tipe_transaksi'] = str(item.get('tipe_transaksi', 'Pengeluaran'))
-                processed_item['kategori'] = str(item.get('kategori', 'Lain-lain'))  # Ubah ke 'kategori'
-                
+                processed_item['kategori'] = str(item.get('kategori', 'Lain-lain'))
+
                 try:
                     processed_item['nominal'] = float(item.get('nominal', 0.0))
                 except (ValueError, TypeError):
                     logger.warning(f"Gagal mengkonversi nominal '{item.get('nominal')}' menjadi float. Menggunakan nilai default 0.0")
                     processed_item['nominal'] = 0.0
-                
-                # Ambil tanggal dari respons, jika tidak ada atau tidak valid, gunakan tanggal saat ini
+
                 tanggal = item.get('tanggal', current_date)
                 try:
-                    # Validasi format tanggal (YYYY-MM-DD)
                     parsed_date = datetime.strptime(tanggal, "%Y-%m-%d")
                     current_datetime = datetime.strptime(current_date, "%Y-%m-%d")
                     if parsed_date > current_datetime:
@@ -274,14 +283,14 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
                     tanggal = current_date
                 processed_item['tanggal'] = tanggal
 
-                processed_item['keterangan'] = str(item.get('keterangan', 'Transaksi otomatis'))  # Tambahkan keterangan
-                 
+                processed_item['keterangan'] = str(item.get('keterangan', 'Transaksi otomatis'))
+
                 transactions_processed.append(processed_item)
 
             logger.info(f"Transaksi yang diparsing dan diproses: {transactions_processed}")
-            
-            return transactions_processed 
-            
+
+            return transactions_processed
+
         except json.JSONDecodeError as e:
             logger.error(f"Gagal mem-parse respons sebagai JSON: {cleaned_text}. Error: {e}")
             raise Exception(f"Respons JSON tidak valid dari Gemini API: {str(e)}. Teks mentah: {generated_text}")
@@ -295,6 +304,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     except Exception as e:
         logger.error(f"Error tak terduga saat memanggil Gemini Image API: {str(e)}")
         raise Exception(f"Error tak terduga saat memanggil Gemini Image API: {str(e)}")
+
 
 # Endpoint untuk memproses pengeluaran (teks) - Keuangan
 @router.post("/process_expense_keuangan")
@@ -325,8 +335,19 @@ async def process_image_expense_keuangan(input: ImageExpenseInput):
     Processes image and caption input to extract Keuangan transaction details using Gemini Vision API.
     """
     try:
-        transactions = call_gemini_image_api_keuangan(input.image, input.caption)
-        return {"transactions": transactions}
+        result = call_gemini_image_api_keuangan(input.image, input.caption)
+
+        # Jika hasil berupa dict dengan transactions dan note
+        if isinstance(result, dict):
+            transactions = result.get("transactions", [])
+            note = result.get("note")
+            return {
+                "transactions": transactions,
+                "note": note
+            }
+        else:
+            # Backward compatibility jika hanya list dikembalikan
+            return {"transactions": result}
     except Exception as e:
         logger.error(f"Error memproses gambar: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses gambar: {str(e)}")
