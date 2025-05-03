@@ -134,6 +134,13 @@ def call_gemini_api_keuangan(text: str):
     
 # Fungsi untuk memanggil API Gemini untuk gambar dan caption (Keuangan)
 # keuangan.py (bagian yang relevan)
+ALLOWED_KATEGORI = [
+    "Makanan & Minuman", "Kehidupan Sosial", "Kebutuhan Anak", "Transportasi", "Pakaian",
+    "Perawatan Diri", "Kesehatan", "Pendidikan", "Hadiah", "Hewan Peliharaan",
+    "Pengembangan Diri", "Aksesoris", "Internet", "Listrik", "Air", "Ponsel",
+    "Asuransi Jiwa", "Asuransi Kesehatan", "Sampah", "Gas", "Saham",
+    "Cicilan Rumah", "Cicilan Kendaraan"
+]
 
 # Fungsi untuk memanggil API Gemini untuk gambar dan caption (Keuangan)
 def call_gemini_image_api_keuangan(image_base64: str, caption: str):
@@ -152,36 +159,43 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")
     
-    
-    prompt = """
-    Analisis gambar ini (misalnya, struk belanja) dan identifikasi setiap transaksi secara terpisah. Untuk setiap item, tentukan:
-    1. Kategori (pilih dari: Makanan & Minuman, Kehidupan Sosial, Kebutuhan Anak, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Jiwa, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
-    2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
-    3. Nominal (jumlah tepat seperti yang tertulis pada item, hilangkan format titik atau koma jika ada, jika ada 2 angka 0 di balekang koma atau titik hilangkan juga, tanpa simbol 'Rp', dan tanpa pembulatan)
-    4. Keterangan (barang/jasa spesifik seperti yang tertulis) atau tentukan dari caption '{caption}' jika ada
+    kategori_str = ", ".join(ALLOWED_KATEGORI)
+    prompt = f"""
+    Berikan daftar transaksi dari gambar struk ini. Untuk setiap item, berikan:
 
-    Instruksi detail: 
-      - Jika ada diskon maka tambahkan minus pada nominal
-      - Jika ada Total maka abaikan nominal yang lain yg menyatakan item
-      - Jika ada pajak maka tambahkan nominal pajak ke nominal item
-      - Jika ada keterangan yang tidak jelas, gunakan "Tidak spesifik" 
-      - Jika ada Kategori di '{caption}',  Maka Penentuan Kategori diutaman berdasarkan caption
-      
-    Kembalikan hasil dalam format JSON yang valid:
-    ```json
-    {
-      "transactions": [
-        {
-          "kategori": "[kategori]",
-          "tipe_transaksi": "[tipe_transaksi]",
-          "nominal": [nominal],
-          "keterangan": "[keterangan]"
-        }
-      ]
-    }
-    ```
-    Jika tidak ada transaksi yang terdeteksi, kembalikan array kosong: {"transactions": []}.
-    Pastikan respons Anda adalah JSON yang valid tanpa teks tambahan di luar JSON.
+    1. Kategori (pilih dari: {kategori_str})
+    2. tipe_transaksi: salah satu dari [Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan]
+    3. Nominal:
+        - Ambil angka dari item yang terlihat seperti harga.
+        - Hilangkan simbol "Rp", titik, dan koma dari angka.
+        - Jika ditemukan dua angka nol di belakang titik atau koma (misalnya ".00" atau ",00"), abaikan bagian tersebut.
+        - Hasil akhir harus berupa angka bulat (tanpa desimal).
+        - Jika item adalah diskon, gunakan nilai negatif.
+        - Jika ditemukan item "Total", hanya ambil nilai dari Total dan abaikan item lain
+    4. keterangan: nama barang/jasa, atau dari caption jika tersedia.
+    5. tanggal: format YYYY-MM-DD, gunakan hari ini jika tidak ditemukan.
+
+    Instruksi tambahan:
+    - Jika caption mengandung nama kategori, gunakan itu untuk seluruh transaksi jika cocok.
+    - Tambahkan nominal pajak ke item jika terpisah.
+    - Jika tidak jelas, isi: kategori = "Lain-lain", keterangan = "Tidak spesifik", nominal = 0.
+    - Jika caption mengandung petunjuk kategori, gunakan sebagai kategori hanya jika sesuai dengan daftar berikut: 
+      {kategori_str}
+    - Jika tidak sesuai daftar, abaikan petunjuk kategori dari caption.
+
+    Jawaban harus berupa JSON valid. Contoh:
+    {{
+    "transactions": [
+        {{
+        "kategori": "Makanan & Minuman",
+        "tipe_transaksi": "Pengeluaran",
+        "nominal": 25000,
+        "keterangan": "Nasi Goreng",
+        "tanggal": "{current_date}"
+        }}
+    ]
+    }}
+    Jika tidak ada transaksi, balas: {{ "transactions": [] }}
     """
 
     payload = {
