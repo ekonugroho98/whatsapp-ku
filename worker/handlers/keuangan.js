@@ -76,6 +76,21 @@ async function handleKeuanganText(sheets, customer, text) {
     const reply = `✅ Transaksi dicatat!\n\n📅 Tanggal: ${formattedDate}\n📋 Kategori: ${kategori}\n💰 Nominal: ${nominalWithCurrency}\n📝 Keterangan: ${keterangan || 'Tidak ada'}`;
     return { reply };
   } catch (error) {
+    if (error.message.includes('The caller does not have permission')) {
+      return {
+        reply:
+          `❌ Sistem tidak dapat mengakses spreadsheet Anda.\n\n` +
+          `🔒 Pastikan Anda sudah membagikan spreadsheet tersebut ke akun berikut:\n` +
+          `📧 *wa-bot@wa-bot-456306.iam.gserviceaccount.com*\n\n` +
+          `📌 Cara memberikan akses:\n` +
+          `1. Buka link spreadsheet Anda\n` +
+          `2. Klik tombol *Bagikan* / *Share*\n` +
+          `3. Tambahkan email di atas sebagai *Editor*\n` +
+          `4. Klik *Kirim*\n\n` +
+          `Setelah itu, silakan coba lagi ya 😊`
+      };
+    }
+    
     console.error('Error di handleKeuanganText:', error.message);
     throw new Error(`Error calling AI endpoint for Keuangan: ${error.message}`);
   }
