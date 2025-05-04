@@ -32,6 +32,14 @@ class ImageExpenseInput(BaseModel):
 # Fungsi untuk memanggil API Gemini untuk teks (Keuangan)
 # keuangan.py (bagian yang relevan)
 
+ALLOWED_KATEGORI = [
+    "Makanan & Minuman", "Kehidupan Sosial", "Kebutuhan Anak", "Transportasi", "Pakaian",
+    "Perawatan Diri", "Kesehatan", "Pendidikan", "Hadiah", "Hewan Peliharaan",
+    "Pengembangan Diri", "Aksesoris", "Internet", "Listrik", "Air", "Ponsel",
+    "Asuransi Jiwa", "Asuransi Kesehatan", "Sampah", "Gas", "Saham",
+    "Cicilan Rumah", "Cicilan Kendaraan"
+]
+
 # Fungsi untuk memanggil API Gemini untuk teks (Keuangan)
 def call_gemini_api_keuangan(text: str):
     """
@@ -52,10 +60,11 @@ def call_gemini_api_keuangan(text: str):
     # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")
     
+    kategori_str = ", ".join(ALLOWED_KATEGORI)
     prompt = f"""
     Dari teks berikut: "{text}"
         Tentukan:
-        1. Kategori (pilih dari: Gaji, Bisnis, Usaha Sampingan, Dividen, Pendapatan Bunga, Komisi, Lain-lain, Makanan & Minuman, Kehidupan Sosial, Transportasi, Pakaian, Perawatan Diri, Kesehatan, Pendidikan, Hadiah, Hewan Peliharaan, Pengembangan Diri, Aksesoris, Internet, Listrik, Air, Ponsel, Asuransi Kesehatan, Sampah, Gas, Saham, Cicilan Rumah, Cicilan Kendaraan)
+        1. kategori (pilih dari: {kategori_str})
         2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
         3. Ekstrak "Nominal". Konversi satuan "k", "rb", "ribu" menjadi x1000; "jt", "juta" menjadi x1000000; "m", "milyar" menjadi x1000000000. Berikan hasil konversi dalam bentuk angka desimal penuh, tanpa simbol mata uang atau satuan. Jika tidak ada atau tidak valid, tetapkan ke 0.
         4. Keterangan (barang/jasa spesifik)
@@ -132,16 +141,100 @@ def call_gemini_api_keuangan(text: str):
         logger.error(f"Error saat memproses respons Gemini (teks keuangan): {str(e)}")
         raise Exception(f"Error saat memproses respons Gemini: {str(e)}")
     
+# Fungsi untuk memanggil DeepSeek API untuk teks (Keuangan)
+def call_deepseek_api_keuangan(text: str):
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        logger.error("DEEPSEEK_API_KEY tidak ditemukan di environment variables")
+        raise Exception("DEEPSEEK_API_KEY tidak ditemukan di environment variables")
+
+    url = "https://api.deepseek.com/chat/completions"
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    
+    kategori_str = ", ".join(ALLOWED_KATEGORI)
+    prompt = f"""
+    Dari teks berikut: \"{text}\"
+        Tentukan:
+        1. kategori (pilih dari: {kategori_str})
+        2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
+        3. Ekstrak \"Nominal\". Konversi satuan \"k\", \"rb\", \"ribu\" menjadi x1000; \"jt\", \"juta\" menjadi x1000000; \"m\", \"milyar\" menjadi x1000000000. Berikan hasil konversi dalam bentuk angka desimal penuh, tanpa simbol mata uang atau satuan. Jika tidak ada atau tidak valid, tetapkan ke 0.
+        4. Keterangan (barang/jasa spesifik)
+        5. Tanggal (format YYYY-MM-DD)
+        Berikan jawaban dalam format JSON:
+        ```json
+        {{
+            "kategori": "[kategori]",
+            "transaksi": "[tipe_transaksi]",
+            "nominal": [nominal],
+            "tanggal": "[tanggal]",
+            "keterangan": "[keterangan]"
+        }}
+        ```
+        Jika tidak ada informasi yang jelas, gunakan default:
+        - Kategori: "Lain-lain"
+        - Transaksi: "Pengeluaran"
+        - Nominal: 0
+        - Keterangan: "Tidak spesifik"
+        - Tanggal: "{current_date}"
+    """
+
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt.strip()}
+        ],
+        "stream": False
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    try:
+        logger.info(f"Memanggil DeepSeek API untuk teks: {text}")
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+        generated_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+        import re
+        json_match = re.search(r'```json\n(.*?)\n```', generated_text, re.DOTALL)
+        if not json_match:
+            logger.error(f"Tidak dapat menemukan JSON dalam respons DeepSeek: {generated_text}")
+            raise Exception("Tidak dapat menemukan JSON dalam respons DeepSeek")
+
+        json_str = json_match.group(1)
+        data = json.loads(json_str)
+
+        response_data = {
+            "kategori": data.get("kategori", "Lain-lain"),
+            "transaksi": data.get("transaksi", "Pengeluaran"),
+            "nominal": data.get("nominal", 0),
+            "tanggal": data.get("tanggal", current_date),
+            "keterangan": data.get("keterangan", "Tidak spesifik")
+        }
+
+        logger.info(f"Hasil dari DeepSeek API: {response_data}")
+        return response_data
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error jaringan saat memanggil DeepSeek API: {str(e)}")
+        raise Exception(f"Error jaringan saat memanggil DeepSeek API: {str(e)}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Gagal parsing JSON dari respons DeepSeek: {str(e)}")
+        raise Exception(f"Gagal parsing JSON dari respons DeepSeek: {str(e)}")
+    except Exception as e:
+        logger.error(f"Kesalahan saat memproses respons DeepSeek: {str(e)}")
+        raise Exception(f"Kesalahan saat memproses respons DeepSeek: {str(e)}")
+    
 # Fungsi untuk memanggil API Gemini untuk gambar dan caption (Keuangan)
 # keuangan.py (bagian yang relevan)
-ALLOWED_KATEGORI = [
-    "Makanan & Minuman", "Kehidupan Sosial", "Kebutuhan Anak", "Transportasi", "Pakaian",
-    "Perawatan Diri", "Kesehatan", "Pendidikan", "Hadiah", "Hewan Peliharaan",
-    "Pengembangan Diri", "Aksesoris", "Internet", "Listrik", "Air", "Ponsel",
-    "Asuransi Jiwa", "Asuransi Kesehatan", "Sampah", "Gas", "Saham",
-    "Cicilan Rumah", "Cicilan Kendaraan"
-]
-
 # Fungsi untuk memanggil API Gemini untuk gambar dan caption (Keuangan)
 def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     logger.info("Masuk ke fungsi call_gemini_image_api_keuangan")
@@ -191,7 +284,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         "tanggal": "[tanggal]",
         "keterangan": "[keterangan]"
     }}
-    
+
     Jika gambar bukan struk belanja atau tidak relevan, balas:
     {{
       "transactions": [],

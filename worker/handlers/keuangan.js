@@ -1,11 +1,21 @@
 const axios = require('axios');
 
-const AI_API_URL = 'http://127.0.0.1:8000'; // Sesuaikan dengan URL FastAPI Anda
+if (!process.env.AI_ENDPOINT_KEUANGAN) {
+  throw new Error("❌ Env AI_ENDPOINT_KEUANGAN belum diset");
+}
+
+if (!process.env.AI_IMAGE_ENDPOINT_KEUANGAN) {
+  throw new Error("❌ Env AI_IMAGE_ENDPOINT_KEUANGAN belum diset");
+}
+
+// Endpoint AI untuk kedua fitur
+const AI_ENDPOINT_KEUANGAN = process.env.AI_ENDPOINT_KEUANGAN;
+const AI_IMAGE_ENDPOINT_KEUANGAN = process.env.AI_IMAGE_ENDPOINT_KEUANGAN;
 
 async function handleKeuanganText(sheets, customer, text) {
   try {
     // Panggil endpoint AI untuk keuangan
-    const response = await axios.post(`${AI_API_URL}/process_expense_keuangan`, { text });
+    const response = await axios.post(`${AI_ENDPOINT_KEUANGAN}`, { text });
     const { transaksi, kategori, nominal, tanggal, keterangan } = response.data;
     console.log('Data dari AI:', response.data);
     // Log data yang diterima
@@ -17,7 +27,15 @@ async function handleKeuanganText(sheets, customer, text) {
 
     // Format tanggal dari YYYY-MM-DD ke DD-MM-YY
     const dateObj = new Date(tanggal);
-    const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getFullYear()).slice(-2)}`;
+    const bulanIndo = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    
+    const t = String(dateObj.getDate()).padStart(2, '0')
+    const bulan = bulanIndo[dateObj.getMonth()];
+    const tahun = dateObj.getFullYear();
+    const formattedDate = `${t} ${bulan} ${tahun}`;
 
     // Format nominal dengan Rp. dan dua desimal
     const formattedNominal = Number(nominal);
@@ -76,7 +94,7 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
     }
 
     const image = imageBufferBase64;
-    const response = await axios.post(`${AI_API_URL}/process_image_expense_keuangan`, {
+    const response = await axios.post(`${AI_IMAGE_ENDPOINT_KEUANGAN}`, {
       image,
       caption,
     });
@@ -120,7 +138,14 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
       });
 
       const dateObj = new Date(t.tanggal);
-      const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getFullYear()).slice(-2)}`;
+      const bulanIndo = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const tanggal = String(dateObj.getDate()).padStart(2, '0');
+      const bulan = bulanIndo[dateObj.getMonth()];
+      const tahun = dateObj.getFullYear();
+      const formattedDate = `${tanggal} ${bulan} ${tahun}`;
       const nominalWithCurrency = `Rp${Number(t.nominal).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
       successMessages.push(

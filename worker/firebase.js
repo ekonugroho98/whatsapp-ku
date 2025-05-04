@@ -17,8 +17,8 @@ const defaultConfig = {
   },
   customers: [],
   ai: {
-    endpoint: process.env.AI_ENDPOINT || 'http://localhost:8000/process_expense',
-    imageEndpoint: process.env.AI_IMAGE_ENDPOINT || 'http://localhost:8000/process_image_expense'
+    endpoint: process.env.AI_ENDPOINT || 'http://ai-service:8000/process_expense',
+    imageEndpoint: process.env.AI_IMAGE_ENDPOINT || 'http://ai-service:8000/process_image_expense'
   }
 };
 

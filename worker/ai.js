@@ -1,10 +1,25 @@
 const axios = require('axios');
 
+if (!process.env.AI_ENDPOINT_KEUANGAN) {
+  throw new Error("❌ Env AI_ENDPOINT_KEUANGAN belum diset");
+}
+
+if (!process.env.AI_IMAGE_ENDPOINT_KEUANGAN) {
+  throw new Error("❌ Env AI_IMAGE_ENDPOINT_KEUANGAN belum diset");
+}
+if (!process.env.AI_ENDPOINT_LM) {
+  throw new Error("❌ Env AI_ENDPOINT_LM belum diset");
+}
+
+if (!process.env.AI_IMAGE_ENDPOINT_LM) {
+  throw new Error("❌ Env AI_IMAGE_ENDPOINT_LM belum diset");
+}
+
 // Endpoint AI untuk kedua fitur
-const AI_ENDPOINT_LM = process.env.AI_ENDPOINT_LM || 'http://localhost:8000/process_expense_lm';
-const AI_IMAGE_ENDPOINT_LM = process.env.AI_IMAGE_ENDPOINT_LM || 'http://localhost:8000/process_image_expense_lm';
-const AI_ENDPOINT_KEUANGAN = process.env.AI_ENDPOINT_KEUANGAN || 'http://localhost:8000/process_expense_keuangan';
-const AI_IMAGE_ENDPOINT_KEUANGAN = process.env.AI_IMAGE_ENDPOINT_KEUANGAN || 'http://localhost:8000/process_image_expense_keuangan';
+const AI_ENDPOINT_LM = process.env.AI_ENDPOINT_LM;
+const AI_IMAGE_ENDPOINT_LM = process.env.AI_IMAGE_ENDPOINT_LM;
+const AI_ENDPOINT_KEUANGAN = process.env.AI_ENDPOINT_KEUANGAN;
+const AI_IMAGE_ENDPOINT_KEUANGAN = process.env.AI_IMAGE_ENDPOINT_KEUANGAN;
 
 // Get category from AI untuk Logam Mulia
 async function getCategoryFromAILM(text) {
@@ -53,6 +68,8 @@ async function processImageWithAILM(imageBuffer, caption) {
 
 // Process image with AI untuk Keuangan
 async function processImageWithAIKeuangan(imageBuffer) {
+
+  console.log('Processing image with AI for Keuangan...', AI_IMAGE_ENDPOINT_KEUANGAN);
   try {
     const response = await axios.post(AI_IMAGE_ENDPOINT_KEUANGAN, { 
       image: imageBuffer.toString('base64')

@@ -116,5 +116,4 @@ app.post('/process-message', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => console.log(`Worker running on port ${PORT}`));
+app.listen(3002, () => console.log(`Worker running on port 3002`));

@@ -1,3 +1,5 @@
+globalThis.crypto = require('crypto'); // ⬅️ Tambahkan ini
+
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const dotenv = require('dotenv');
@@ -7,6 +9,7 @@ const express = require('express');
 const dns = require('dns').promises;
 
 dotenv.config();
+
 
 (async () => {
   try {

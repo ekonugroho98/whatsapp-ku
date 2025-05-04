@@ -1,20 +1,13 @@
-FROM node:18
+FROM node:18-alpine
 
-   WORKDIR /app
+WORKDIR /app
 
-   COPY package.json .
+COPY package*.json ./
+RUN npm install
 
-   # Set NPM registry and debug installation
-   RUN npm config set registry https://registry.npmjs.org \
-       && npm cache clean --force \
-       && npm install --verbose || npm install --verbose || npm install --verbose
+# install curl + compatibility layer (optional)
+RUN apk add --no-cache curl libc6-compat
 
-   # List installed dependencies for debugging
-   RUN ls /app/node_modules > /app/installed_modules.txt
+COPY . .
 
-   # Verify that @whiskeysockets/baileys is installed
-   RUN ls /app/node_modules/@whiskeysockets/baileys || { echo "@whiskeysockets/baileys not found after npm install"; cat /app/installed_modules.txt; exit 1; }
-
-   COPY . .
-
-   CMD ["node", "index.js"]
+CMD ["node", "index.js"]
