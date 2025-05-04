@@ -1,5 +1,5 @@
 # keuangan.py
-from fastapi import APIRouter, HTTPException
+from fastapi import UploadFile, File, APIRouter, HTTPException
 from pydantic import BaseModel
 import requests
 import logging
@@ -20,6 +20,10 @@ router = APIRouter()
 # Model untuk validasi input teks
 class ExpenseInput(BaseModel):
     text: str
+
+
+class VoiceExpenseInput(BaseModel):
+    file_base64: str  # base64 encoded mp3
 
 # Model untuk validasi input gambar dan caption
 class ImageExpenseInput(BaseModel):
@@ -66,9 +70,20 @@ def call_gemini_api_keuangan(text: str):
         Tentukan:
         1. kategori (pilih dari: {kategori_str})
         2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
-        3. Ekstrak "Nominal". Konversi satuan "k", "rb", "ribu" menjadi x1000; "jt", "juta" menjadi x1000000; "m", "milyar" menjadi x1000000000. Berikan hasil konversi dalam bentuk angka desimal penuh, tanpa simbol mata uang atau satuan. Jika tidak ada atau tidak valid, tetapkan ke 0.
+        3. Ekstrak "Nominal":
+        - Jika ditemukan angka dengan atau tanpa satuan (seperti: "500000", "5jt", "300 ribu"):
+            - "k", "rb", "ribu" = x1000
+            - "jt", "juta" = x1000000
+            - "m", "milyar" = x1000000000
+        - Jika angka tanpa satuan (misal: 500000), tetap anggap sebagai nominal dalam Rupiah.
+        - Hapus simbol mata uang atau satuan.
+        - Jika tidak ditemukan nominal valid, tetapkan ke 0.
         4. Keterangan (barang/jasa spesifik)
         5. Tanggal (format YYYY-MM-DD)
+
+        Catatan tambahan:
+        - Jika kata "tabungan", "simpanan", atau "deposito" disebutkan, maka kategori kemungkinan besar adalah "Investasi".
+        
         Berikan jawaban dalam format JSON:
         ```json
         {{
@@ -444,6 +459,89 @@ async def process_image_expense_keuangan(input: ImageExpenseInput):
     except Exception as e:
         logger.error(f"Error memproses gambar: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses gambar: {str(e)}")
+
+@router.post("/process_voice_expense_keuangan")
+async def process_voice_expense_keuangan(input: VoiceExpenseInput):
+    try:
+        result = call_gemini_voice_api_keuangan(input.file_base64)
+        return result
+    except Exception as e:
+        logger.error(f"Error memproses voice note: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses voice note: {str(e)}")
+    
+def call_gemini_voice_api_keuangan(file_base64: str):
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
+        raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
+
+    # 1. Upload file to Gemini File API
+    file_upload_url = f"https://generativelanguage.googleapis.com/v1beta/files?key={api_key}"
+    upload_headers = {"Content-Type": "application/json"}
+    upload_payload = {
+        "file": {
+            "mimeType": "audio/mp3",
+            "data": file_base64
+        }
+    }
+
+    try:
+        logger.info("Mengunggah file audio ke File API Gemini")
+        upload_response = requests.post(file_upload_url, json=upload_payload, headers=upload_headers)
+        upload_response.raise_for_status()
+        file_result = upload_response.json()
+        file_uri = file_result.get("name")  # e.g. "files/xxxx"
+        if not file_uri:
+            raise Exception("Upload file berhasil tapi file_uri tidak ditemukan")
+    except Exception as e:
+        logger.error(f"Gagal mengunggah file ke Gemini: {str(e)}")
+        raise
+
+    # 2. Kirim prompt dan fileUri ke generateContent
+    gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+
+    prompt = """
+    Analisis konten dari voice note berikut.
+    Apakah ada diskusi yang berkaitan dengan transaksi keuangan, seperti:
+    - Pembelian atau penjualan barang/jasa?
+    - Pembayaran atau transfer uang?
+    - Penyebutan harga, jumlah, atau total biaya?
+    - Konfirmasi pesanan atau kesepakatan jual beli?
+
+    Jika ada, berikan ringkasan singkat mengenai indikasi transaksi tersebut.
+    Jika tidak ada, balas "Tidak ditemukan transaksi yang relevan."
+    """
+
+    gen_payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "fileData": {
+                            "mimeType": "audio/mp3",
+                            "fileUri": file_uri
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    try:
+        logger.info("Memanggil Gemini API dengan fileUri untuk analisis voice note")
+        response = requests.post(gen_url, json=gen_payload, headers=upload_headers)
+        response.raise_for_status()
+        result = response.json()
+        generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+        return {"summary": generated_text}
+    except Exception as e:
+        logger.error(f"Gagal memproses voice note dengan Gemini: {str(e)}")
+        raise
     
 # Fungsi untuk menghasilkan perintah curl
 def generate_curl_command(url: str, headers: dict, payload: dict) -> str:

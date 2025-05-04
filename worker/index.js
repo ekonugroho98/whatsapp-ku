@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const { createSheetsClient } = require('./sheets');
 const { handleRegistration, handleSpreadsheetLink, handleUpdateFeatures, checkCustomerStatus, updateLastActive, getConfig } = require('./customer');
 const { handleLogamMuliaText, handleLogamMuliaImage } = require('./handlers/logamMulia');
-const { handleKeuanganText, handleKeuanganImage } = require('./handlers/keuangan');
+const { handleKeuanganText, handleKeuanganImage , handleKeuanganVoice } = require('./handlers/keuangan');
 
 dotenv.config();
 
@@ -108,6 +108,8 @@ app.post('/process-message', async (req, res) => {
         return res.json({ reply: result.reply });
       }
     }
+  
+ 
 
     return res.json({ reply: '❌ Pesan tidak dikenali. Kirim teks transaksi atau gambar struk.' });
   } catch (error) {

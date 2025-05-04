@@ -11,6 +11,7 @@ if (!process.env.AI_IMAGE_ENDPOINT_KEUANGAN) {
 // Endpoint AI untuk kedua fitur
 const AI_ENDPOINT_KEUANGAN = process.env.AI_ENDPOINT_KEUANGAN;
 const AI_IMAGE_ENDPOINT_KEUANGAN = process.env.AI_IMAGE_ENDPOINT_KEUANGAN;
+const AI_VOICE_ENDPOINT_KEUANGAN = process.env.AI_VOICE_ENDPOINT_KEUANGAN;
 
 async function handleKeuanganText(sheets, customer, text) {
   try {
@@ -179,10 +180,82 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
   }
 }
 
+async function handleKeuanganVoice(sheets, customer, audioBufferBase64, caption) {
+  try {
+    if (!audioBufferBase64 || typeof audioBufferBase64 !== 'string' || audioBufferBase64.length < 1000) {
+      throw new Error('Voice note tidak valid atau terlalu kecil.');
+    }
+
+    const response = await axios.post(`${AI_VOICE_ENDPOINT_KEUANGAN}`, {
+      audio: audioBufferBase64,
+      caption,
+    });
+
+    const { transactions = [], note } = response.data;
+
+    if (note && transactions.length === 0) {
+      return { reply: note };
+    }
+
+    if (transactions.length === 0) {
+      return { reply: 'Tidak ditemukan transaksi dari voice note ini.' };
+    }
+
+    const spreadsheetId = customer.spreadsheets?.keuangan;
+    if (!spreadsheetId) {
+      throw new Error('Spreadsheet untuk fitur keuangan tidak ditemukan.');
+    }
+
+    const sheetName = getCurrentMonthInThreeLetters();
+    const range = `${sheetName}!C:W`;
+
+    const successMessages = [];
+    for (const t of transactions) {
+      const values = [[
+        t.tanggal,
+        t.tipe_transaksi,
+        '', '',
+        t.kategori,
+        '', '',
+        'Rp.',
+        t.nominal,
+        t.keterangan
+      ]];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range,
+        valueInputOption: 'RAW',
+        resource: { values },
+      });
+
+      const dateObj = new Date(t.tanggal);
+      const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+      const formattedNominal = Number(t.nominal);
+      const nominalWithCurrency = `Rp${formattedNominal.toLocaleString('id-ID', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+
+      successMessages.push(
+        `✅ Transaksi dari voice note dicatat!\n\n📅 Tanggal: ${formattedDate}\n📋 Kategori: ${t.kategori}\n💰 Nominal: ${nominalWithCurrency}\n📝 Keterangan: ${t.keterangan || 'Tidak ada'}`
+      );
+    }
+
+    return { reply: successMessages.join('\n\n') };
+  } catch (error) {
+    console.error('Error di handleKeuanganVoice:', error.message);
+    throw new Error(`Error memproses voice note keuangan: ${error.message}`);
+  }
+}
+
+
 
 function getCurrentMonthInThreeLetters() {
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
   return months[new Date().getMonth()];
 }
 
-module.exports = { handleKeuanganText, handleKeuanganImage };
+module.exports = { handleKeuanganText, handleKeuanganImage, handleKeuanganVoice };

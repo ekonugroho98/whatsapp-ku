@@ -61,7 +61,7 @@ async function handleSpreadsheetLink(text, from, isAdmin, config) {
       throw new Error('Nomor tidak ditemukan dalam daftar pelanggan.');
     }
 
-    const customerFeatures = customer.features || ['logam_mulia'];
+    const customerFeatures = customer.features || ['keuangan'];
     if (customerFeatures.length > 1) {
       throw new Error(
         '❌ Nomor ini memiliki lebih dari satu fitur. Harap gunakan pembeda:\n' +

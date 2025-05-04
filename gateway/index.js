@@ -41,7 +41,7 @@ function getTextFromMessage(message) {
   return message?.conversation || message?.extendedTextMessage?.text || '';
 }
 
-async function handleMessageWithValidation(msg, imageBase64, sock) {
+async function handleMessageWithValidation(msg, imageBase64, audioBase64, sock) {
   const sender = msg.key.remoteJid;
   const text = getTextFromMessage(msg.message);
 
@@ -51,6 +51,11 @@ async function handleMessageWithValidation(msg, imageBase64, sock) {
 
   if (imageBase64) {
     return await forwardToWorker({ message: msg, imageBufferBase64: imageBase64 });
+  }
+
+   // ⬇️ Tambahkan untuk audio
+   if (audioBase64) {
+    return await forwardToWorker({ message: msg, audioBufferBase64: audioBase64 });
   }
 
   return {
@@ -107,7 +112,7 @@ async function startGateway() {
 
     const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
     if (!RELEASE_MODE && sender !== ALLOWED_DEV_NUMBER) {
-      console.log(`Pesan dari ${sender} diabaikan karena mode pengembangan.`);
+      console.log(`Pesan dari ${sender} diabaikan karena mode ${RELEASE_MODE ? 'produksi' : 'pengembangan'}.`);
       return;
     }
 
@@ -118,8 +123,14 @@ async function startGateway() {
         imageBufferBase64 = buffer.toString('base64');
       }
 
+      let audioBufferBase64 = null;
+      if (msg.message.audioMessage) {
+        const buffer = await downloadMediaMessage(msg, 'buffer', {});
+        audioBufferBase64 = buffer.toString('base64');
+      }
+
       console.log(`Received message from ${msg.key.remoteJid}: ${getTextFromMessage(msg.message)}`);
-      const result = await handleMessageWithValidation(msg, imageBufferBase64, sock);
+      const result = await handleMessageWithValidation(msg, imageBufferBase64, audioBufferBase64, sock);
 
       if (result.reply) {
         await sock.sendMessage(msg.key.remoteJid, { text: result.reply });
