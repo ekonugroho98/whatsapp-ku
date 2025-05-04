@@ -278,7 +278,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         - Jika ditemukan dua angka nol di belakang titik atau koma (misalnya ".00" atau ",00"), abaikan bagian tersebut.
         - Hasil akhir harus berupa angka bulat (tanpa desimal).
         - Jika item adalah diskon, gunakan nilai negatif.
-        - Jika ditemukan item \"Total\", hanya ambil nilai dari Total dan abaikan item lain
+        - Abaikan item yang mengandung kata seperti: "Total", "Grand Total", "Jumlah", "Subtotal", "Total Harga", atau variasinya.
     4. keterangan: nama barang/jasa, atau dari caption jika tersedia.
     5. tanggal: format YYYY-MM-DD, gunakan hari ini jika tidak ditemukan.
 
@@ -289,6 +289,7 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
       {kategori_str}
     - Jika tidak sesuai daftar, abaikan petunjuk kategori dari caption.
     - Jika Nama item jelas, tentukan kategori berdasarkan nama item.
+    - Jika ditemukan baris dengan label pajak seperti "PPN", "PB1", "VAT", "Tax", "Pajak", atau yang mirip, masukkan sebagai item transaksi dengan kategori "Lain-lain" dan tipe_transaksi "Pengeluaran", kecuali jika konteks menunjukkan kategori lain yang lebih relevan.
 
     Berikan jawaban dalam format JSON:
     ```json
@@ -349,7 +350,16 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         try:
             parsed_result = json.loads(cleaned_text)
 
-            note = parsed_result.get("note")
+            if isinstance(parsed_result, list):
+                # Jika langsung list transaksi
+                transactions_raw = parsed_result
+                note = None
+            elif isinstance(parsed_result, dict):
+                transactions_raw = parsed_result.get("transactions", [])
+                note = parsed_result.get("note")
+            else:
+                raise Exception("Format JSON dari Gemini tidak dikenali")
+            
             if note:
                 logger.info(f"Catatan dari Gemini: {note}")
                 return {
