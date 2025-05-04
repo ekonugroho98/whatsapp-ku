@@ -112,7 +112,7 @@ app.post('/process-message', async (req, res) => {
     return res.json({ reply: '❌ Pesan tidak dikenali. Kirim teks transaksi atau gambar struk.' });
   } catch (error) {
     console.error('Error saat memproses pesan:', error.message);
-    return res.status(500).json({ reply: `❌ Server error: ${error.message}` });
+    return res.json({ reply: `❌ ` + error.message });
   }
 });
 

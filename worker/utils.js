@@ -45,7 +45,7 @@ function parseNominal(nominalStr) {
   }
   
   function extractSpreadsheetId(url) {
-    const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    const regex = /\/d\/([a-zA-Z0-9-_]{25,})/;
     const match = url.match(regex);
     return match ? match[1] : null;
   }

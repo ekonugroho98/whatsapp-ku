@@ -17,9 +17,7 @@ async function handleKeuanganText(sheets, customer, text) {
     // Panggil endpoint AI untuk keuangan
     const response = await axios.post(`${AI_ENDPOINT_KEUANGAN}`, { text });
     const { transaksi, kategori, nominal, tanggal, keterangan } = response.data;
-    console.log('Data dari AI:', response.data);
     // Log data yang diterima
-    console.log('Data dari AI untuk Keuangan:', { transaksi, kategori, nominal, tanggal, keterangan });
 
     if (!kategori || !nominal || !tanggal) {
       throw new Error('Data dari AI tidak lengkap: ' + JSON.stringify(response.data));

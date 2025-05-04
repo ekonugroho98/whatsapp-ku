@@ -9,7 +9,7 @@ async function handleRegistration(text, from, isAdmin, config) {
 
   const parts = text.split('FITUR :');
   let newNumber = parts[0].split('DAFTAR : ')[1].trim();
-  let features = ['logam_mulia'];
+  let features = ['keuangan'];
 
   if (newNumber.startsWith('08')) {
     newNumber = '62' + newNumber.slice(1);
@@ -130,13 +130,15 @@ async function checkCustomerStatus(from, config, selectedFeature) {
   const spreadsheets = customer.spreadsheets || {};
   if (!spreadsheets[selectedFeature]) {
     throw new Error(
-      `Spreadsheet ID untuk fitur ${selectedFeature} belum diatur!\n\n` +
-      `Silakan kirim link spreadsheet Anda dengan format:\n` +
-      `- Untuk Logam Mulia: SPREADSHEET LM: ${from} [link]\n` +
-      `- Untuk Keuangan: SPREADSHEET KEUANGAN: ${from} [link]\n\n` +
-      `Contoh link:\nhttps://docs.google.com/spreadsheets/d/1lPo7qP8szZr9WgDd_H82wtbK-p6cgyjOW2N_CvGGQZg/edit#gid=0`
+      `Spreadsheet ID untuk fitur *${selectedFeature}* belum diatur!\n\n` +
+      `📄 Silakan ikuti langkah berikut:\n` +
+      `1. Buka link ini → https://tinyurl.com/SpreadSheetsWA\n` +
+      `2. Make a copy*\n` +
+      `3. Kirim link spreadsheet Anda ke sini.\n\n` +
+      `📌 Contoh link:\nhttps://docs.google.com/spreadsheets/d/1lPo7qP8szZr9WgDd_H82wtbK-p6cgyjOW2N_CvGGQZg/edit#gid=0`
     );
   }
+  
 
   return customer;
 }

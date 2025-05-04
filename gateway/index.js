@@ -44,9 +44,8 @@ function getTextFromMessage(message) {
 async function handleMessageWithValidation(msg, imageBase64, sock) {
   const sender = msg.key.remoteJid;
   const text = getTextFromMessage(msg.message);
-  const caption = msg.message?.imageMessage?.caption || '';
 
-  if (text && isValidTransactionText(text)) {
+  if (text) {
     return await forwardToWorker({ message: msg, imageBufferBase64: imageBase64 });
   }
 
@@ -130,7 +129,7 @@ async function startGateway() {
       }
     } catch (error) {
       console.error('Error forwarding message to worker:', error.message);
-      await sock.sendMessage(msg.key.remoteJid, { text: '❌ Server error. Silakan coba lagi nanti.' });
+      await sock.sendMessage(msg.key.remoteJid, { text: '❌ '+ error.message });
     }
   });
 }
