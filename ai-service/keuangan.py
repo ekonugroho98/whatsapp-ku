@@ -37,7 +37,7 @@ ALLOWED_KATEGORI = [
     "Perawatan Diri", "Kesehatan", "Pendidikan", "Hadiah", "Hewan Peliharaan",
     "Pengembangan Diri", "Aksesoris", "Internet", "Listrik", "Air", "Ponsel",
     "Asuransi Jiwa", "Asuransi Kesehatan", "Sampah", "Gas", "Saham",
-    "Cicilan Rumah", "Cicilan Kendaraan"
+    "Cicilan Rumah", "Cicilan Kendaraan", "Gaji","Bisnis", "Usaha Sampingan","Dividen","Pendapatan Bunga","Komisi","Pemasukan Lainnya"
 ]
 
 # Fungsi untuk memanggil API Gemini untuk teks (Keuangan)
