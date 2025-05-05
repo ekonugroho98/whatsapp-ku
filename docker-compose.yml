@@ -12,6 +12,7 @@ services:
          - BOT_PHONE_NUMBER=${BOT_PHONE_NUMBER}
          - WORKER_ENDPOINT=http://worker:3002
          - RELEASE_MODE=${RELEASE_MODE}
+         - REDIS_URL=${REDIS_URL}
        dns:
          - 8.8.8.8
          - 8.8.4.4
@@ -46,6 +47,7 @@ services:
           - AI_IMAGE_ENDPOINT_KEUANGAN=http://ai-service:8000/process_image_expense_keuangan
           - AI_ENDPOINT_LM=http://ai-service:8000/process_expense_lm
           - AI_IMAGE_ENDPOINT_LM=http://ai-service:8000/process_image_expense_lm
+          - REDIS_URL=${REDIS_URL}
        ports:
          - "3002:3002"
        depends_on:
@@ -80,6 +82,19 @@ services:
        ports:
          - "8000:8000"
 
+     redis:
+      image: redis:7
+      container_name: redis-server
+      ports:
+        - "6379:6379"  # ⬅️ buka port ke host
+      volumes:
+        - redis_data:/data
+      command: redis-server --appendonly yes --bind 0.0.0.0
+      networks:
+        - whatsapp-bot-network
+
+volumes:
+  redis_data:
 
 networks:
      whatsapp-bot-network:

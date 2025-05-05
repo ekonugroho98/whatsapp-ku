@@ -52,18 +52,20 @@ def call_gemini_api_keuangan(text: str):
     """
     from dotenv import load_dotenv
     import os
+    import re
+    import json
+    from datetime import datetime
+    import requests
+
     load_dotenv()
-    
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         logger.error("GEMINI_API_KEY tidak ditemukan di environment variables")
         raise Exception("GEMINI_API_KEY tidak ditemukan di environment variables")
-        
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    
-    # Tanggal saat ini untuk default
     current_date = datetime.now().strftime("%Y-%m-%d")
-    
+
     kategori_str = ", ".join(ALLOWED_KATEGORI)
     prompt = f"""
     Dari teks berikut: "{text}"
@@ -83,6 +85,8 @@ def call_gemini_api_keuangan(text: str):
 
         Catatan tambahan:
         - Jika kata "tabungan", "simpanan", atau "deposito" disebutkan, maka kategori kemungkinan besar adalah "Investasi".
+        - Jika ada kata yang menyatakan tanggal seperti "hari ini", "kemarin", "besok", gunakan tanggal tersebut tanggal {current_date}.
+        - Jika tidak ada informasi tanggal, gunakan tanggal saat ini {current_date}.
         
         Berikan jawaban dalam format JSON:
         ```json
@@ -93,13 +97,11 @@ def call_gemini_api_keuangan(text: str):
             "tanggal": "[tanggal]",
             "keterangan": "[keterangan]"
         }}
-        ```
-        Jika tidak ada informasi yang jelas, gunakan default:
-        - Kategori: "Lain-lain"
-        - Transaksi: "Pengeluaran"
-        - Nominal: 0
-        - Keterangan: "Tidak spesifik"
-        - Tanggal: "{current_date}"
+
+        Jika tidak ada informasi transaksi, gunakan format:
+        {{
+            "note": "Teks ini tidak tampak seperti transaksi keuangan. Jika ingin mencatat transaksi, coba gunakan format seperti 'beli kopi 15rb' atau 'gaji bulan ini 3jt'."
+        }}
     """
 
     payload = {
@@ -107,32 +109,30 @@ def call_gemini_api_keuangan(text: str):
             "parts": [{"text": prompt}]
         }]
     }
-    
+
     headers = {
         "Content-Type": "application/json"
     }
-    
+
     try:
         logger.info(f"Memanggil Gemini API untuk teks: {text}")
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
         result = response.json()
-        
-        # Ambil teks yang dihasilkan oleh Gemini
+
         generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        
-        # Cari JSON dalam teks menggunakan regex
-        import re
         json_match = re.search(r'```json\n(.*?)\n```', generated_text, re.DOTALL)
         if not json_match:
             logger.error(f"Tidak dapat menemukan JSON dalam respons Gemini: {generated_text}")
             raise Exception("Tidak dapat menemukan JSON dalam respons Gemini")
 
-        # Parse JSON dari teks
         json_str = json_match.group(1)
         data = json.loads(json_str)
-        
-        # Pastikan semua field ada, gunakan default jika tidak ada
+
+        if "note" in data:
+            logger.info(f"Gemini mengembalikan note: {data['note']}")
+            return {"note": data["note"]}
+
         response_data = {
             "kategori": data.get("kategori", "Lain-lain"),
             "transaksi": data.get("transaksi", "Pengeluaran"),
@@ -141,11 +141,9 @@ def call_gemini_api_keuangan(text: str):
             "keterangan": data.get("keterangan", "Tidak spesifik")
         }
 
-        # Log hasil dari Gemini
         logger.info(f"Hasil dari Gemini API: {response_data}")
-        
         return response_data
-    
+
     except requests.exceptions.RequestException as e:
         logger.error(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
         raise Exception(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
@@ -155,6 +153,7 @@ def call_gemini_api_keuangan(text: str):
     except Exception as e:
         logger.error(f"Error saat memproses respons Gemini (teks keuangan): {str(e)}")
         raise Exception(f"Error saat memproses respons Gemini: {str(e)}")
+
     
 # Fungsi untuk memanggil DeepSeek API untuk teks (Keuangan)
 def call_deepseek_api_keuangan(text: str):
@@ -172,13 +171,25 @@ def call_deepseek_api_keuangan(text: str):
     
     kategori_str = ", ".join(ALLOWED_KATEGORI)
     prompt = f"""
-    Dari teks berikut: \"{text}\"
+     Dari teks berikut: "{text}"
         Tentukan:
         1. kategori (pilih dari: {kategori_str})
         2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
-        3. Ekstrak \"Nominal\". Konversi satuan \"k\", \"rb\", \"ribu\" menjadi x1000; \"jt\", \"juta\" menjadi x1000000; \"m\", \"milyar\" menjadi x1000000000. Berikan hasil konversi dalam bentuk angka desimal penuh, tanpa simbol mata uang atau satuan. Jika tidak ada atau tidak valid, tetapkan ke 0.
+        3. Ekstrak "Nominal":
+        - Jika ditemukan angka dengan atau tanpa satuan (seperti: "500000", "5jt", "300 ribu"):
+            - "k", "rb", "ribu" = x1000
+            - "jt", "juta" = x1000000
+            - "m", "milyar" = x1000000000
+        - Jika angka tanpa satuan (misal: 500000), tetap anggap sebagai nominal dalam Rupiah.
+        - Hapus simbol mata uang atau satuan.
+        - Jika tidak ditemukan nominal valid, tetapkan ke 0.
         4. Keterangan (barang/jasa spesifik)
         5. Tanggal (format YYYY-MM-DD)
+
+        Catatan tambahan:
+        - Jika kata "tabungan", "simpanan", atau "deposito" disebutkan, maka kategori kemungkinan besar adalah "Investasi".
+        - Jika ada kata yang menyatakan tanggal seperti "hari ini", "kemarin", "besok", gunakan tanggal tersebut tanggal {current_date}.
+        - Jika tidak ada informasi tanggal, gunakan tanggal saat ini {current_date}.
         Berikan jawaban dalam format JSON:
         ```json
         {{
@@ -188,13 +199,12 @@ def call_deepseek_api_keuangan(text: str):
             "tanggal": "[tanggal]",
             "keterangan": "[keterangan]"
         }}
-        ```
-        Jika tidak ada informasi yang jelas, gunakan default:
-        - Kategori: "Lain-lain"
-        - Transaksi: "Pengeluaran"
-        - Nominal: 0
-        - Keterangan: "Tidak spesifik"
-        - Tanggal: "{current_date}"
+
+        Jika tidak ada informasi transaksi, gunakan format:
+        {{
+            "transactions": [],
+            "note": "Teks ini tidak tampak seperti transaksi keuangan. Jika ingin mencatat transaksi, coba gunakan format seperti 'beli kopi 15rb' atau 'gaji bulan ini 3jt'."
+        }}
     """
 
     payload = {
@@ -226,7 +236,11 @@ def call_deepseek_api_keuangan(text: str):
 
         json_str = json_match.group(1)
         data = json.loads(json_str)
-
+        
+        if "note" in data:
+            logger.info(f"Gemini mengembalikan note: {data['note']}")
+            return {"note": data["note"]}
+    
         response_data = {
             "kategori": data.get("kategori", "Lain-lain"),
             "transaksi": data.get("transaksi", "Pengeluaran"),
@@ -307,10 +321,6 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
       "note": "Gambar ini tidak tampak seperti struk belanja. Jika kamu ingin saya bantu mencatat transaksi, silakan kirim foto struk yang jelas."
     }}
 
-    Jika tidak ada transaksi, balas: 
-    {{
-      "transactions": []
-    }}
     """
 
     payload = {
@@ -436,14 +446,23 @@ async def process_expense_keuangan(input: ExpenseInput):
         raise HTTPException(status_code=400, detail="Teks tidak boleh kosong")
 
     try:
-        result = call_gemini_api_keuangan(text)
-        if "error" in result:
-            logger.warning(f"Gemini API returned specific error for text '{text}': {result['error']}")
-            raise HTTPException(status_code=400, detail=f"Kesalahan dari Gemini: {result['error']}")
-        return result
+        result = call_deepseek_api_keuangan(text)
+
+        # Jika hasil berupa note, kembalikan langsung
+        if "note" in result:
+            return {"transactions": [], "note": result["note"]}
+
+        # Jika hasil transaksi valid
+        return {
+            "transactions": [result],
+            "note": None
+        }
+
     except Exception as e:
         logger.error(f"Error memproses input teks '{text}': {str(e)}")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses teks: {str(e)}")
+
+
 
 # Endpoint untuk memproses pengeluaran (gambar dan caption) - Keuangan
 @router.post("/process_image_expense_keuangan")

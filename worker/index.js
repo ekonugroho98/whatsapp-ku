@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const { createSheetsClient } = require('./sheets');
 const { handleRegistration, handleSpreadsheetLink, handleUpdateFeatures, checkCustomerStatus, updateLastActive, getConfig } = require('./customer');
 const { handleLogamMuliaText, handleLogamMuliaImage } = require('./handlers/logamMulia');
-const { handleKeuanganText, handleKeuanganImage , handleKeuanganVoice } = require('./handlers/keuangan');
+const { handleKeuanganText, handleKeuanganImage , handleKeuanganVoice, handleHapusTerakhirKeuangan } = require('./handlers/keuangan');
 
 dotenv.config();
 
@@ -59,6 +59,12 @@ app.post('/process-message', async (req, res) => {
       return res.json({ reply: '❌ Nomor Anda tidak terdaftar sebagai pelanggan.\nHubungi admin untuk mendaftarkan nomor Anda.' });
     }
 
+    const lowerText = text.toLowerCase();  // Tambahkan ini di awal blok 'if (selectedFeature === 'keuangan')'
+    if (lowerText === 'hapus terakhir' || lowerText === 'hapus_transaksi_terakhir') {
+      const result = await handleHapusTerakhirKeuangan(sheets, customer);
+      return res.json({ reply: result.reply });
+    }
+
     const customerFeatures = customer.features || ['logam_mulia'];
     let selectedFeature = null;
     let cleanText = text;
@@ -94,6 +100,13 @@ app.post('/process-message', async (req, res) => {
         const result = await handleLogamMuliaText(sheets, customer, cleanText);
         return res.json({ reply: result.reply });
       } else if (selectedFeature === 'keuangan') {
+
+        const lowerText = text.toLowerCase();  // Tambahkan ini di awal blok 'if (selectedFeature === 'keuangan')'
+        if (lowerText === 'hapus terakhir' || lowerText === 'hapus_transaksi_terakhir') {
+          const result = await handleHapusTerakhirKeuangan(sheets, customer);
+          return res.json({ reply: result.reply });
+        }
+
         const result = await handleKeuanganText(sheets, customer, cleanText);
         return res.json({ reply: result.reply });
       }
