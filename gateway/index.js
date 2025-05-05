@@ -46,10 +46,12 @@ async function handleMessageWithValidation(msg, imageBase64, audioBase64, sock) 
   const text = getTextFromMessage(msg.message);
 
   if (text) {
+    await sock.sendPresenceUpdate('composing', sender); // Efek mengetik
     return await forwardToWorker({ message: msg, imageBufferBase64: imageBase64 });
   }
 
   if (imageBase64) {
+    await sock.sendPresenceUpdate('composing', sender); // Efek mengetik
     return await forwardToWorker({ message: msg, imageBufferBase64: imageBase64 });
   }
 

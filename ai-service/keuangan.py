@@ -308,19 +308,11 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     Berikan jawaban dalam format JSON:
     ```json
     {{
-        "kategori": "[kategori]",
-        "transaksi": "[tipe_transaksi]",
-        "nominal": [nominal],
-        "tanggal": "[tanggal]",
-        "keterangan": "[keterangan]"
+        "transactions": [{{...}}],
+        "note": "..."
     }}
 
-    Jika gambar bukan struk belanja atau tidak relevan, balas:
-    {{
-      "transactions": [],
-      "note": "Gambar ini tidak tampak seperti struk belanja. Jika kamu ingin saya bantu mencatat transaksi, silakan kirim foto struk yang jelas."
-    }}
-
+    Jika Gemini mengembalikan list langsung, tetap berikan sesuai JSON standar.
     """
 
     payload = {
@@ -357,75 +349,29 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
         elif cleaned_text.startswith("```"):
             cleaned_text = generated_text[3:-3].strip()
 
-        try:
-            parsed_result = json.loads(cleaned_text)
+        parsed_result = json.loads(cleaned_text)
 
-            if isinstance(parsed_result, list):
-                # Jika langsung list transaksi
-                transactions_raw = parsed_result
-                note = None
-            elif isinstance(parsed_result, dict):
-                transactions_raw = parsed_result.get("transactions", [])
-                note = parsed_result.get("note")
-            else:
-                raise Exception("Format JSON dari Gemini tidak dikenali")
-            
-            if note:
-                logger.info(f"Catatan dari Gemini: {note}")
-                return {
-                    "transactions": [],
-                    "note": note
-                }
+        if isinstance(parsed_result, list):
+            logger.warning("⚠️ Respons Gemini berupa list langsung, tidak dalam object dengan key 'transactions'")
+            return {
+                "transactions": parsed_result,
+                "note": None
+            }
 
-            if not isinstance(parsed_result, dict) or "transactions" not in parsed_result or not isinstance(parsed_result["transactions"], list):
-                logger.error(f"Struktur respons JSON dari Gemini tidak valid: {parsed_result}")
-                raise Exception(f"Struktur JSON tidak valid dari Gemini API. Teks respons mentah: {generated_text}")
+        elif isinstance(parsed_result, dict):
+            transactions_raw = parsed_result.get("transactions", [])
+            note = parsed_result.get("note")
+            return {
+                "transactions": transactions_raw,
+                "note": note
+            }
 
-            transactions_raw = parsed_result["transactions"]
+        else:
+            raise Exception("Struktur JSON dari Gemini tidak valid atau tidak dikenali")
 
-            transactions_processed = []
-            for item in transactions_raw:
-                if not isinstance(item, dict):
-                    logger.warning(f"Item dalam array transactions bukan objek: {item}. Melewati.")
-                    continue
-
-                processed_item = {}
-                processed_item['tipe_transaksi'] = str(item.get('tipe_transaksi', 'Pengeluaran'))
-                processed_item['kategori'] = str(item.get('kategori', 'Lain-lain'))
-
-                try:
-                    processed_item['nominal'] = float(item.get('nominal', 0.0))
-                except (ValueError, TypeError):
-                    logger.warning(f"Gagal mengkonversi nominal '{item.get('nominal')}' menjadi float. Menggunakan nilai default 0.0")
-                    processed_item['nominal'] = 0.0
-
-                tanggal = item.get('tanggal', current_date)
-                try:
-                    parsed_date = datetime.strptime(tanggal, "%Y-%m-%d")
-                    current_datetime = datetime.strptime(current_date, "%Y-%m-%d")
-                    if parsed_date > current_datetime:
-                        logger.warning(f"Tanggal '{tanggal}' adalah tanggal di masa depan. Menggunakan tanggal saat ini: {current_date}")
-                        tanggal = current_date
-                except ValueError:
-                    logger.warning(f"Tanggal '{tanggal}' tidak valid. Menggunakan tanggal saat ini: {current_date}")
-                    tanggal = current_date
-                processed_item['tanggal'] = tanggal
-
-                processed_item['keterangan'] = str(item.get('keterangan', 'Transaksi otomatis'))
-
-                transactions_processed.append(processed_item)
-
-            logger.info(f"Transaksi yang diparsing dan diproses: {transactions_processed}")
-
-            return transactions_processed
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Gagal mem-parse respons sebagai JSON: {cleaned_text}. Error: {e}")
-            raise Exception(f"Respons JSON tidak valid dari Gemini API: {str(e)}. Teks mentah: {generated_text}")
-        except Exception as e:
-            logger.error(f"Error saat memproses struktur JSON dari Gemini: {str(e)}. Teks mentah: {generated_text}")
-            raise Exception(f"Error memproses struktur JSON dari Gemini: {str(e)}. Teks mentah: {generated_text}")
-
+    except json.JSONDecodeError as e:
+        logger.error(f"Gagal mem-parse JSON: {cleaned_text}. Error: {e}")
+        raise Exception(f"Respons JSON tidak valid dari Gemini API: {str(e)}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
         raise Exception(f"Error jaringan atau request timeout saat memanggil Gemini API: {str(e)}")
