@@ -87,7 +87,7 @@ def call_gemini_api_keuangan(text: str):
         - Jika kata "tabungan", "simpanan", atau "deposito" disebutkan, maka kategori kemungkinan besar adalah "Investasi".
         - Jika ada kata yang menyatakan tanggal seperti "hari ini", "kemarin", "besok", gunakan tanggal tersebut tanggal {current_date}.
         - Jika tidak ada informasi tanggal, gunakan tanggal saat ini {current_date}.
-        
+
         Berikan jawaban dalam format JSON:
         ```json
         {{
@@ -446,7 +446,7 @@ async def process_expense_keuangan(input: ExpenseInput):
         raise HTTPException(status_code=400, detail="Teks tidak boleh kosong")
 
     try:
-        result = call_deepseek_api_keuangan(text)
+        result = call_gemini_api_keuangan(text)
 
         # Jika hasil berupa note, kembalikan langsung
         if "note" in result:
