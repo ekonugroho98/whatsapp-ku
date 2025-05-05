@@ -79,7 +79,7 @@ async function handleKeuanganText(sheets, customer, text) {
       resource: { values },
     });
 
-    await saveLastTransactionsToRedis(`${customer.phoneNumber}`, [transaksiObj]);
+    // await saveLastTransactionsToRedis(`${customer.phoneNumber}`, [transaksiObj]);
 
     return {
       reply: `✅ Transaksi dicatat!\n\n📅 Tanggal: ${formattedDate}\n📋 Kategori: ${kategori}\n💰 Nominal: ${nominalWithCurrency}\n📝 Keterangan: ${keterangan || 'Tidak ada'}`
@@ -155,7 +155,7 @@ async function handleKeuanganImage(sheets, customer, imageBufferBase64, caption)
         resource: { values },
       });
     
-      await saveLastTransactionsToRedis(`${customer.phoneNumber}`, transactions);
+      // await saveLastTransactionsToRedis(`${customer.phoneNumber}`, transactions);
 
       const dateObj = new Date(t.tanggal);
       const bulanIndo = [
@@ -235,7 +235,7 @@ async function handleKeuanganVoice(sheets, customer, audioBufferBase64, caption)
         resource: { values },
       });
       
-      await saveLastTransactionsToRedis(`${customer.phoneNumber}`, transactions);
+      // await saveLastTransactionsToRedis(`${customer.phoneNumber}`, transactions);
 
       const dateObj = new Date(t.tanggal);
       const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',

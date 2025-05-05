@@ -36,7 +36,7 @@ class ImageExpenseInput(BaseModel):
 # Fungsi untuk memanggil API Gemini untuk teks (Keuangan)
 # keuangan.py (bagian yang relevan)
 
-ALLOWED_KATEGORI = [
+ALLOWED_KATEGORI_PNG = [
     "Makanan & Minuman", "Kehidupan Sosial", "Kebutuhan Anak", "Transportasi", "Pakaian",
     "Perawatan Diri", "Kesehatan", "Pendidikan", "Hadiah", "Hewan Peliharaan",
     "Pengembangan Diri", "Aksesoris", "Internet", "Listrik", "Air", "Ponsel",
@@ -66,11 +66,11 @@ def call_gemini_api_keuangan(text: str):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    kategori_str = ", ".join(ALLOWED_KATEGORI)
+    kategori_png_str = ", ".join(ALLOWED_KATEGORI_PNG)
     prompt = f"""
     Dari teks berikut: "{text}"
         Tentukan:
-        1. kategori (pilih dari: {kategori_str})
+        1. kategori (pilih dari: {kategori_png_str}) jika peengeluaran, jika pendapatan pilih dari: Gaji, Bisnis, Usaha Sampingan, Dividen, Pendapatan Bunga, Komisi, Pemasukan Lainnya
         2. Tipe Transaksi (pilih dari: Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan)
         3. Ekstrak "Nominal":
         - Jika ditemukan angka dengan atau tanpa satuan (seperti: "500000", "5jt", "300 ribu"):
@@ -280,37 +280,44 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
 
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    kategori_str = ", ".join(ALLOWED_KATEGORI)
+    kategori_png_str = ", ".join(ALLOWED_KATEGORI_PNG)
     prompt = f"""
-    Berikan daftar transaksi dari gambar struk ini. Untuk setiap item, berikan:
-
-    1. kategori (pilih dari: {kategori_str})
-    2. tipe_transaksi: salah satu dari [Pendapatan, Pengeluaran, Tagihan, Investasi, Cicilan]
-    3. nominal:
-        - Ambil angka dari item yang terlihat seperti harga.
-        - Hilangkan simbol \"Rp\", titik, dan koma dari angka.
-        - Jika ditemukan dua angka nol di belakang titik atau koma (misalnya ".00" atau ",00"), abaikan bagian tersebut.
-        - Hasil akhir harus berupa angka bulat (tanpa desimal).
-        - Jika item adalah diskon, gunakan nilai negatif.
-        - Abaikan item yang mengandung kata seperti: "Total", "Grand Total", "Jumlah", "Subtotal", "Total Harga", atau variasinya.
-    4. keterangan: nama barang/jasa, atau dari caption jika tersedia.
-    5. tanggal: format YYYY-MM-DD, gunakan hari ini jika tidak ditemukan.
+    Ambil data transaksi dari gambar struk ini. Untuk tiap item, berikan:
+    1. kategori (pilih dari: {kategori_png_str})
+    2. tipe_transaksi: Pendapatan / Pengeluaran / Tagihan / Investasi / Cicilan
+    3. nominal: angka bulat, hilangkan Rp, titik, koma. Diskon = nilai negatif. Abaikan "Total", "Subtotal", dll.
+    4. Keterangan (barang/jasa spesifik seperti yang tertulis) atau dari {caption} jika ada.
+    5. tanggal: format YYYY-MM-DD, pakai hari ini jika tidak ada tanggal
 
     Instruksi tambahan:
-    - Jika caption mengandung petunjuk kategori, gunakan sebagai kategori hanya jika sesuai dengan daftar berikut: 
-      {kategori_str}
-    - Jika tidak sesuai daftar, abaikan petunjuk kategori dari caption.
-    - Jika ditemukan baris dengan label pajak seperti "PPN", "PB1", "VAT", "Tax", "Pajak", atau yang mirip, masukkan sebagai item transaksi dengan kategori "Lain-lain" dan tipe_transaksi "Pengeluaran", kecuali jika konteks menunjukkan kategori lain yang lebih relevan.
+    - Asumsikan struk adalah BUKTI PEMBELIAN oleh pengguna, jadi semua transaksi bertipe "Pengeluaran".
+    - Jangan gunakan tipe "Pendapatan", kecuali sangat jelas bahwa struk adalah penjualan.
+    - Jika nama item sudah cukup jelas (misalnya: kopi, teh, botol celup), gunakan kategori dari daftar sesuai konteks item tersebut.
+    - Hindari default ke kategori "Pemasukan Lainnya" jika kategori seperti "Makanan & Minuman", "Bisnis", atau lainnya lebih cocok.
+    - Jika caption menyebut kategori yang cocok, gunakan itu.
+    - Gabungkan pajak (PPN, VAT, Tax) sebagai transaksi "Pengeluaran" dan kategori "Lain-lain", kecuali konteks menunjukkan sebaliknya.
 
-    Berikan jawaban dalam format JSON:
-    ```json
+    Jawab dengan JSON object:
     {{
-        "transactions": [{{...}}],
-        "note": "..."
+    "transactions": [
+        {{
+        "kategori": "Makanan & Minuman",
+        "tipe_transaksi": "Pengeluaran",
+        "nominal": 15000,
+        "tanggal": "2025-05-05",
+        "keterangan": "kopi"
+        }}
+    ],
+    "note": ""
     }}
 
-    Jika Gemini mengembalikan list langsung, tetap berikan sesuai JSON standar.
+    Jika gambar bukan struk, jawab:
+    {{
+    "transactions": [],
+    "note": "Gambar ini bukan struk belanja."
+    }}
     """
+
 
     payload = {
         "contents": [{
