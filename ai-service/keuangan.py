@@ -297,12 +297,9 @@ def call_gemini_image_api_keuangan(image_base64: str, caption: str):
     5. tanggal: format YYYY-MM-DD, gunakan hari ini jika tidak ditemukan.
 
     Instruksi tambahan:
-    - Jika caption mengandung nama kategori, gunakan itu untuk seluruh transaksi jika cocok.
-    - Tambahkan nominal pajak ke item jika terpisah.
     - Jika caption mengandung petunjuk kategori, gunakan sebagai kategori hanya jika sesuai dengan daftar berikut: 
       {kategori_str}
     - Jika tidak sesuai daftar, abaikan petunjuk kategori dari caption.
-    - Jika Nama item jelas, tentukan kategori berdasarkan nama item.
     - Jika ditemukan baris dengan label pajak seperti "PPN", "PB1", "VAT", "Tax", "Pajak", atau yang mirip, masukkan sebagai item transaksi dengan kategori "Lain-lain" dan tipe_transaksi "Pengeluaran", kecuali jika konteks menunjukkan kategori lain yang lebih relevan.
 
     Berikan jawaban dalam format JSON:
